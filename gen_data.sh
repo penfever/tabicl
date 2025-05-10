@@ -4,7 +4,7 @@
 # ./gen_data.sh
 
 python generate_data.py \
-       --n_datasets 1000 \
+       --n_datasets 10 \
        --prior mlp_scm \
        --min_features 20 \
        --max_features 1000 \
@@ -12,7 +12,6 @@ python generate_data.py \
        --max_seq 50000 \
        --max_classes 10 \
        --replay_small \
-       # --seq_len_per_gp \
        --out_dir ../synth/mlp_scm \
        --inner_bsz 256
 
@@ -25,7 +24,6 @@ python generate_data.py \
        --max_seq 50000 \
        --max_classes 10 \
        --replay_small \
-       # --seq_len_per_gp \
        --out_dir ../synth/tree_scm \
        --inner_bsz 256
        
