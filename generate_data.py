@@ -17,7 +17,9 @@ def tensor_to_numpy(t: torch.Tensor) -> np.ndarray:
 def generate(args):
     ds = PriorDataset(
         batch_size=args.inner_bsz,
-        prior_type=args.prior,          # “mix_scm” resamples family each batch
+        batch_size_per_gp=1,
+        batch_size_per_subgp=1,
+        prior_type=args.prior,
         min_features=args.min_features,
         max_features=args.max_features,
         max_classes=args.max_classes,
@@ -25,14 +27,12 @@ def generate(args):
         max_seq_len=args.max_seq,
         log_seq_len=args.log_seq,
         replay_small=args.replay_small,
-        seq_len_per_gp=True,
-        batch_size_per_gp=max(1, args.inner_bsz // 4),
-        batch_size_per_subgp=max(1, args.inner_bsz // 8),
+        seq_len_per_gp=args.seq_len_per_gp,
         n_jobs=1,
         num_threads_per_generate=2,
-        device="cuda" if torch.cuda.is_available() else "cpu"
-    )
-    print(f"[info] PriorDataset ready (prior={args.prior}). "
+        device="cuda" if torch.cuda.is_available() else "cpu",
+)
+    print(f"PriorDataset ready (prior={args.prior}). "
           f"Requesting first batch …")
 
     produced = 0
@@ -81,6 +81,7 @@ def get_args():
     ap.add_argument("--log_seq", action="store_true")
     ap.add_argument("--max_classes", type=int, default=10)
     ap.add_argument("--replay_small", action="store_true")
+    ap.add_argument("--seq_len_per_gp", action="store_true")
     ap.add_argument("--inner_bsz", type=int, default=256,
                     help="episodes produced per generator call")
     ap.add_argument("--out_dir", type=pathlib.Path, required=True)
