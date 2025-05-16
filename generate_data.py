@@ -32,6 +32,8 @@ def generate(args):
         n_jobs=1,
         num_threads_per_generate=2,
         device="cuda" if torch.cuda.is_available() else "cpu",
+        min_imbalance_ratio=args.min_imbalance_ratio,
+        max_imbalance_ratio=args.max_imbalance_ratio,
 )
     print(f"PriorDataset ready (prior={args.prior}). "
           f"Requesting first batch …")
@@ -87,6 +89,12 @@ def get_args():
     ap.add_argument("--inner_bsz", type=int, default=256,
                     help="episodes produced per generator call")
     ap.add_argument("--out_dir", type=pathlib.Path, required=True)
+    ap.add_argument("--min_imbalance_ratio", type=float, default=1.0,
+                    help="minimum ratio between largest and smallest class sizes (1.0 = balanced). "
+                         "E.g., 2.0 means the largest class is at least 2x the smallest.")
+    ap.add_argument("--max_imbalance_ratio", type=float, default=1.0,
+                    help="maximum ratio between largest and smallest class sizes. "
+                         "E.g., 10.0 means the largest class can be up to 10x the smallest.")
     return ap.parse_args()
 
 if __name__ == "__main__":

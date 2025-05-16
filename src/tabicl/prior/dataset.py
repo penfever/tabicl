@@ -468,6 +468,14 @@ class SCMPrior(Prior):
 
     device : str, default="cpu"
         Computation device ('cpu' or 'cuda')
+
+    min_imbalance_ratio : float, default=1.0
+        Minimum ratio between the largest and smallest class sizes (1.0 = balanced).
+        Higher values indicate more imbalanced datasets.
+
+    max_imbalance_ratio : float, default=1.0
+        Maximum ratio between the largest and smallest class sizes.
+        Must be >= min_imbalance_ratio.
     """
 
     def __init__(
@@ -492,6 +500,8 @@ class SCMPrior(Prior):
         n_jobs: int = -1,
         num_threads_per_generate: int = 1,
         device: str = "cpu",
+        min_imbalance_ratio: float = 1.0,
+        max_imbalance_ratio: float = 1.0,
     ):
         super().__init__(
             batch_size=batch_size,
@@ -516,6 +526,10 @@ class SCMPrior(Prior):
         self.n_jobs = n_jobs
         self.num_threads_per_generate = num_threads_per_generate
         self.device = device
+        if min_imbalance_ratio > max_imbalance_ratio:
+            raise ValueError(f"min_imbalance_ratio ({min_imbalance_ratio}) must be <= max_imbalance_ratio ({max_imbalance_ratio})")
+        self.min_imbalance_ratio = min_imbalance_ratio
+        self.max_imbalance_ratio = max_imbalance_ratio
 
     def hp_sampling(self) -> Dict[str, Any]:
         """
@@ -662,6 +676,9 @@ class SCMPrior(Prior):
                     else:
                         ds_num_classes = self.min_classes
 
+                    # Sample an imbalance ratio for this dataset
+                    imbalance_ratio = np.random.uniform(self.min_imbalance_ratio, self.max_imbalance_ratio)
+                    
                     # Create parameters dictionary for this dataset
                     params = {
                         **self.fixed_hp,  # Fixed HPs
@@ -675,6 +692,7 @@ class SCMPrior(Prior):
                         "num_features": subgp_num_features,
                         "num_classes": ds_num_classes,
                         "device": self.device,
+                        "imbalance_ratio": imbalance_ratio,
                     }
                     param_list.append(params)
 
@@ -768,6 +786,14 @@ class DummyPrior(Prior):
 
     device : str, default="cpu"
         Computation device
+
+    min_imbalance_ratio : float, default=1.0
+        Minimum ratio between the largest and smallest class sizes (1.0 = balanced).
+        Higher values indicate more imbalanced datasets.
+
+    max_imbalance_ratio : float, default=1.0
+        Maximum ratio between the largest and smallest class sizes.
+        Must be >= min_imbalance_ratio.
     """
 
     def __init__(
@@ -783,6 +809,8 @@ class DummyPrior(Prior):
         min_train_size: Union[int, float] = 0.1,
         max_train_size: Union[int, float] = 0.9,
         device: str = "cpu",
+        min_imbalance_ratio: float = 1.0,
+        max_imbalance_ratio: float = 1.0,
     ):
         super().__init__(
             batch_size=batch_size,
@@ -797,6 +825,10 @@ class DummyPrior(Prior):
             max_train_size=max_train_size,
         )
         self.device = device
+        if min_imbalance_ratio > max_imbalance_ratio:
+            raise ValueError(f"min_imbalance_ratio ({min_imbalance_ratio}) must be <= max_imbalance_ratio ({max_imbalance_ratio})")
+        self.min_imbalance_ratio = min_imbalance_ratio
+        self.max_imbalance_ratio = max_imbalance_ratio
 
     @torch.no_grad()
     def get_batch(self, batch_size: Optional[int] = None) -> Tuple[Tensor, Tensor, Tensor, Tensor, Tensor]:
@@ -838,7 +870,37 @@ class DummyPrior(Prior):
         X = torch.randn(batch_size, seq_len, self.max_features, device=self.device)
 
         num_classes = np.random.randint(self.min_classes, self.max_classes + 1)
-        y = torch.randint(0, num_classes, (batch_size, seq_len), device=self.device)
+        
+        # Generate imbalanced class labels if requested
+        if self.min_imbalance_ratio > 1.0 or self.max_imbalance_ratio > 1.0:
+            # Sample an imbalance ratio for this batch
+            imbalance_ratio = np.random.uniform(self.min_imbalance_ratio, self.max_imbalance_ratio)
+            
+            # Calculate class proportions
+            if imbalance_ratio == 1.0:
+                proportions = [1.0 / num_classes] * num_classes
+            else:
+                r = imbalance_ratio ** (1 / (num_classes - 1))
+                proportions = [r ** i for i in range(num_classes)]
+                total = sum(proportions)
+                proportions = [p / total for p in proportions]
+                proportions.reverse()
+            
+            # Generate labels according to proportions
+            y = torch.zeros(batch_size, seq_len, dtype=torch.long, device=self.device)
+            for b in range(batch_size):
+                # Create random values and assign classes based on proportions
+                rand_vals = torch.rand(seq_len, device=self.device)
+                cumsum = 0
+                for c in range(num_classes):
+                    if c == num_classes - 1:
+                        mask = rand_vals >= cumsum
+                    else:
+                        mask = (rand_vals >= cumsum) & (rand_vals < cumsum + proportions[c])
+                    y[b][mask] = c
+                    cumsum += proportions[c]
+        else:
+            y = torch.randint(0, num_classes, (batch_size, seq_len), device=self.device)
 
         d = torch.full((batch_size,), self.max_features, device=self.device)
         seq_lens = torch.full((batch_size,), seq_len, device=self.device)
@@ -920,6 +982,14 @@ class PriorDataset(IterableDataset):
 
     device : str, default="cpu"
         Computation device ('cpu' or 'cuda')
+        
+    min_imbalance_ratio : float, default=1.0
+        Minimum class imbalance ratio. Used in SCM priors to control
+        the minimum imbalance between target classes.
+        
+    max_imbalance_ratio : float, default=1.0
+        Maximum class imbalance ratio. Used in SCM priors to control
+        the maximum imbalance between target classes.
     """
 
     def __init__(
@@ -944,6 +1014,8 @@ class PriorDataset(IterableDataset):
         n_jobs: int = -1,
         num_threads_per_generate: int = 1,
         device: str = "cpu",
+        min_imbalance_ratio: float = 1.0,
+        max_imbalance_ratio: float = 1.0,
     ):
         super().__init__()
         if prior_type == "dummy":
@@ -959,6 +1031,8 @@ class PriorDataset(IterableDataset):
                 min_train_size=min_train_size,
                 max_train_size=max_train_size,
                 device=device,
+                min_imbalance_ratio=min_imbalance_ratio,
+                max_imbalance_ratio=max_imbalance_ratio,
             )
         elif prior_type in ["mlp_scm", "tree_scm", "mix_scm"]:
             self.prior = SCMPrior(
@@ -982,6 +1056,8 @@ class PriorDataset(IterableDataset):
                 n_jobs=n_jobs,
                 num_threads_per_generate=num_threads_per_generate,
                 device=device,
+                min_imbalance_ratio=min_imbalance_ratio,
+                max_imbalance_ratio=max_imbalance_ratio,
             )
         else:
             raise ValueError(

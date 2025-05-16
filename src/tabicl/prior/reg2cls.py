@@ -8,6 +8,8 @@ import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
 
+from .imbalanced_assigner import ImbalancedMulticlassAssigner
+
 
 def torch_nanstd(input, dim=None, keepdim=False, ddof=0, *, dtype=None) -> Tensor:
     """Calculates the standard deviation of a tensor, ignoring NaNs, using NumPy internally.
@@ -268,14 +270,23 @@ class Reg2Cls(nn.Module):
         self.hp = hp
 
         num_classes = self.hp["num_classes"]
+        imbalance_ratio = self.hp.get("imbalance_ratio", 1.0)
+        
         if num_classes == 0:
             self.class_assigner = None
         elif num_classes == 2 and self.hp.get("balanced", False):
             self.class_assigner = BalancedBinarize()
         elif num_classes >= 2:
-            self.class_assigner = MulticlassAssigner(
-                num_classes, mode=self.hp["multiclass_type"], ordered_prob=self.hp["multiclass_ordered_prob"]
-            )
+            if imbalance_ratio > 1.0:
+                # Use the imbalanced assigner when imbalance is requested
+                self.class_assigner = ImbalancedMulticlassAssigner(
+                    num_classes, imbalance_ratio=imbalance_ratio, mode=self.hp["multiclass_type"]
+                )
+            else:
+                # Use the regular assigner for balanced classes
+                self.class_assigner = MulticlassAssigner(
+                    num_classes, mode=self.hp["multiclass_type"], ordered_prob=self.hp["multiclass_ordered_prob"]
+                )
         else:
             raise ValueError(f"Invalid number of classes: {num_classes}")
 
