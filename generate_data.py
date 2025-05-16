@@ -22,6 +22,7 @@ def generate(args):
         prior_type=args.prior,
         min_features=args.min_features,
         max_features=args.max_features,
+        min_classes=args.min_classes,
         max_classes=args.max_classes,
         min_seq_len=args.min_seq,
         max_seq_len=args.max_seq,
@@ -79,6 +80,7 @@ def get_args():
     ap.add_argument("--min_seq", type=int, default=200)
     ap.add_argument("--max_seq", type=int, default=60_000)
     ap.add_argument("--log_seq", action="store_true")
+    ap.add_argument("--min_classes", type=int, default=2)
     ap.add_argument("--max_classes", type=int, default=10)
     ap.add_argument("--replay_small", action="store_true")
     ap.add_argument("--seq_len_per_gp", action="store_true")

@@ -92,6 +92,7 @@ class Prior:
         batch_size: int = 256,
         min_features: int = 2,
         max_features: int = 100,
+        min_classes: int = 2,
         max_classes: int = 10,
         min_seq_len: Optional[int] = None,
         max_seq_len: int = 1024,
@@ -106,6 +107,8 @@ class Prior:
         self.min_features = min_features
         self.max_features = max_features
 
+        assert min_classes <= max_classes, "Invalid class range"
+        self.min_classes = min_classes
         self.max_classes = max_classes
         self.min_seq_len = min_seq_len
         self.max_seq_len = max_seq_len
@@ -474,6 +477,7 @@ class SCMPrior(Prior):
         batch_size_per_subgp: Optional[int] = None,
         min_features: int = 2,
         max_features: int = 100,
+        min_classes: int = 2,
         max_classes: int = 10,
         min_seq_len: Optional[int] = None,
         max_seq_len: int = 1024,
@@ -493,6 +497,7 @@ class SCMPrior(Prior):
             batch_size=batch_size,
             min_features=min_features,
             max_features=max_features,
+            min_classes=min_classes,
             max_classes=max_classes,
             min_seq_len=min_seq_len,
             max_seq_len=max_seq_len,
@@ -653,9 +658,9 @@ class SCMPrior(Prior):
                 for ds_idx in range(actual_subgp_size):
                     # Each dataset has its own number of classes
                     if np.random.random() > 0.5:
-                        ds_num_classes = np.random.randint(2, self.max_classes + 1)
+                        ds_num_classes = np.random.randint(self.min_classes, self.max_classes + 1)
                     else:
-                        ds_num_classes = 2
+                        ds_num_classes = self.min_classes
 
                     # Create parameters dictionary for this dataset
                     params = {
@@ -770,6 +775,7 @@ class DummyPrior(Prior):
         batch_size: int = 256,
         min_features: int = 2,
         max_features: int = 100,
+        min_classes: int = 2,
         max_classes: int = 10,
         min_seq_len: Optional[int] = None,
         max_seq_len: int = 1024,
@@ -782,6 +788,7 @@ class DummyPrior(Prior):
             batch_size=batch_size,
             min_features=min_features,
             max_features=max_features,
+            min_classes=min_classes,
             max_classes=max_classes,
             min_seq_len=min_seq_len,
             max_seq_len=max_seq_len,
@@ -830,7 +837,7 @@ class DummyPrior(Prior):
 
         X = torch.randn(batch_size, seq_len, self.max_features, device=self.device)
 
-        num_classes = np.random.randint(2, self.max_classes + 1)
+        num_classes = np.random.randint(self.min_classes, self.max_classes + 1)
         y = torch.randint(0, num_classes, (batch_size, seq_len), device=self.device)
 
         d = torch.full((batch_size,), self.max_features, device=self.device)
@@ -922,6 +929,7 @@ class PriorDataset(IterableDataset):
         batch_size_per_subgp: Optional[int] = None,
         min_features: int = 2,
         max_features: int = 100,
+        min_classes: int = 2,
         max_classes: int = 10,
         min_seq_len: Optional[int] = None,
         max_seq_len: int = 1024,
@@ -943,6 +951,7 @@ class PriorDataset(IterableDataset):
                 batch_size=batch_size,
                 min_features=min_features,
                 max_features=max_features,
+                min_classes=min_classes,
                 max_classes=max_classes,
                 min_seq_len=min_seq_len,
                 max_seq_len=max_seq_len,
@@ -958,6 +967,7 @@ class PriorDataset(IterableDataset):
                 batch_size_per_subgp=batch_size_per_subgp,
                 min_features=min_features,
                 max_features=max_features,
+                min_classes=min_classes,
                 max_classes=max_classes,
                 min_seq_len=min_seq_len,
                 max_seq_len=max_seq_len,
@@ -983,6 +993,7 @@ class PriorDataset(IterableDataset):
         self.batch_size_per_subgp = batch_size_per_subgp or batch_size_per_gp
         self.min_features = min_features
         self.max_features = max_features
+        self.min_classes = min_classes
         self.max_classes = max_classes
         self.min_seq_len = min_seq_len
         self.max_seq_len = max_seq_len
@@ -1067,7 +1078,7 @@ class PriorDataset(IterableDataset):
             f"  batch_size: {self.batch_size}\n"
             f"  batch_size_per_gp: {self.batch_size_per_gp}\n"
             f"  features: {self.min_features} - {self.max_features}\n"
-            f"  max classes: {self.max_classes}\n"
+            f"  classes: {self.min_classes} - {self.max_classes}\n"
             f"  seq_len: {self.min_seq_len or 'None'} - {self.max_seq_len}\n"
             f"  sequence length varies across groups: {self.seq_len_per_gp}\n"
             f"  train_size: {self.min_train_size} - {self.max_train_size}\n"
