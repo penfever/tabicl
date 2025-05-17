@@ -33,7 +33,14 @@ def setup_distributed(rank: int, world_size: int, backend: str = "nccl"):
 
 def cleanup_distributed():
     """Clean up the distributed environment."""
-    destroy_process_group()
+    import torch.distributed as dist
+    if dist.is_initialized():
+        try:
+            dist.barrier()  # Final synchronization before cleanup
+            destroy_process_group()
+        except Exception as e:
+            print(f"Warning: Cleanup error (can be ignored): {e}")
+            pass
 
 
 def get_dataset_split(total_datasets: int, rank: int, world_size: int) -> Tuple[int, int]:
@@ -274,6 +281,12 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
     if pbar is not None:
         pbar.close()
     
+    # Synchronize all ranks before cleanup
+    if world_size > 1:
+        import torch.distributed as dist
+        if dist.is_initialized():
+            dist.barrier()
+    
     cleanup_distributed()
 
 
@@ -313,6 +326,9 @@ def generate_multi_gpu(args):
     # Wait for all processes to complete
     for p in processes:
         p.join()
+    
+    # Ensure all ranks have finished before the main process exits
+    torch.cuda.synchronize() if torch.cuda.is_available() else None
 
 
 def generate(args):
