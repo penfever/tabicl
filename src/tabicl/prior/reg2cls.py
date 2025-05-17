@@ -277,16 +277,10 @@ class Reg2Cls(nn.Module):
         elif num_classes == 2 and self.hp.get("balanced", False):
             self.class_assigner = BalancedBinarize()
         elif num_classes >= 2:
-            if imbalance_ratio > 1.0:
-                # Use the imbalanced assigner when imbalance is requested
-                self.class_assigner = ImbalancedMulticlassAssigner(
-                    num_classes, imbalance_ratio=imbalance_ratio, mode=self.hp["multiclass_type"]
-                )
-            else:
-                # Use the regular assigner for balanced classes
-                self.class_assigner = MulticlassAssigner(
-                    num_classes, mode=self.hp["multiclass_type"], ordered_prob=self.hp["multiclass_ordered_prob"]
-                )
+            # Always use the imbalanced assigner for consistency and control
+            self.class_assigner = ImbalancedMulticlassAssigner(
+                num_classes, imbalance_ratio=imbalance_ratio, mode=self.hp["multiclass_type"]
+            )
         else:
             raise ValueError(f"Invalid number of classes: {num_classes}")
 
