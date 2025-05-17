@@ -360,6 +360,8 @@ class Prior:
         bool
             True if all datasets have valid splits, False otherwise
         """
+        import logging
+        logger = logging.getLogger(__name__)
 
         def is_valid_split(yi: Tensor) -> bool:
             """Check if a single dataset has a valid train/test split."""
@@ -375,12 +377,22 @@ class Prior:
 
         # Check each dataset in the batch
         for i, (xi, yi) in enumerate(zip(X, y)):
+            total_unique_classes = len(torch.unique(yi))
+            
             if is_valid_split(yi):
                 continue
 
+            # Log initial status
+            unique_tr_initial = torch.unique(yi[:train_size])
+            unique_te_initial = torch.unique(yi[train_size:])
+            logger.debug(f"Dataset {i}: Invalid initial split. Train classes: {unique_tr_initial.tolist()}, "
+                        f"Test classes: {unique_te_initial.tolist()}, "
+                        f"Total unique classes: {total_unique_classes}, "
+                        f"Required min classes: {min_classes}")
+
             # If the dataset has an invalid split, try to fix it with random permutations
             succeeded = False
-            for _ in range(n_attempts):
+            for attempt in range(n_attempts):
                 # Generate a random permutation of the samples
                 perm = torch.randperm(yi.shape[0])
                 yi_perm = yi[perm]
@@ -389,9 +401,17 @@ class Prior:
                 if is_valid_split(yi_perm):
                     X[i], y[i] = xi_perm, yi_perm
                     succeeded = True
+                    logger.debug(f"Dataset {i}: Valid split found after {attempt + 1} attempts")
                     break
 
             if not succeeded:  # No valid split was found after all attempts
+                unique_tr_final = torch.unique(yi[:train_size])
+                unique_te_final = torch.unique(yi[train_size:])
+                logger.warning(f"Dataset {i}: Failed to find valid split after {n_attempts} attempts. "
+                              f"Train classes: {unique_tr_final.tolist()}, "
+                              f"Test classes: {unique_te_final.tolist()}, "
+                              f"Total unique classes: {total_unique_classes}, "
+                              f"Required min classes: {min_classes}")
                 return False
 
         return True
@@ -562,6 +582,8 @@ class SCMPrior(Prior):
             - y: Labels tensor of shape (seq_len,)
             - d: Number of active features after filtering (scalar Tensor)
         """
+        import logging
+        logger = logging.getLogger(__name__)
 
         if params["prior_type"] == "mlp_scm":
             prior_cls = MLPSCM
@@ -570,6 +592,9 @@ class SCMPrior(Prior):
         else:
             raise ValueError(f"Unknown prior type {params['prior_type']}")
 
+        # Get expected min classes from the instance
+        expected_min_classes = self.min_classes
+        
         while True:
             X, y = prior_cls(**params)()
             X, y = Reg2Cls(params)(X, y)
@@ -580,7 +605,22 @@ class SCMPrior(Prior):
 
             # Only keep valid datasets with sufficient features and balanced classes
             X, d = self.delete_unique_features(X, d)
-            if (d > 0).all() and self.sanity_check(X, y, params["train_size"]):
+            
+            # Pass min_classes to sanity_check
+            if (d > 0).all() and self.sanity_check(X, y, params["train_size"], min_classes=expected_min_classes):
+                # Check actual number of classes
+                actual_classes = len(torch.unique(y.squeeze(0)))
+                requested_classes = params["num_classes"]
+                
+                # Log if fewer classes than expected
+                if actual_classes < expected_min_classes:
+                    logger.warning(f"Dataset generated with {actual_classes} classes, "
+                                   f"which is less than min_classes={expected_min_classes}. "
+                                   f"Originally requested {requested_classes} classes.")
+                elif actual_classes < requested_classes:
+                    logger.info(f"Dataset generated with {actual_classes} classes, "
+                                f"less than requested {requested_classes} classes.")
+                
                 return X.squeeze(0), y.squeeze(0), d.squeeze(0)
 
     @torch.no_grad()

@@ -2,6 +2,7 @@ import argparse
 import pathlib
 import os
 import time
+import logging
 from typing import Tuple
 import numpy as np
 import torch
@@ -399,6 +400,9 @@ def get_args():
                     help="also save data as CSV files (slower but more accessible)")
     ap.add_argument("--master_port", type=str, default="29500",
                     help="master port for distributed training")
+    ap.add_argument("--log_level", type=str, default="INFO",
+                    choices=["DEBUG", "INFO", "WARNING", "ERROR"],
+                    help="logging level")
     
     return ap.parse_args()
 
@@ -406,9 +410,23 @@ if __name__ == "__main__":
     args = get_args()
     args.out_dir.mkdir(parents=True, exist_ok=True)
     
+    # Set up logging
+    log_level = getattr(logging, args.log_level.upper())
+    logging.basicConfig(
+        level=log_level,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        handlers=[
+            logging.StreamHandler(),
+            logging.FileHandler(args.out_dir / 'generate_data.log')
+        ]
+    )
+    logger = logging.getLogger(__name__)
+    
     # Set up distributed environment variables
     os.environ['MASTER_ADDR'] = 'localhost'
     os.environ['MASTER_PORT'] = args.master_port
+    
+    logger.info(f"Starting dataset generation with args: {args}")
     
     start_time = time.time()
     generate(args)
@@ -416,3 +434,4 @@ if __name__ == "__main__":
     
     print(f"\nFinished generating {args.n_datasets} datasets in {end_time - start_time:.2f} seconds")
     print(f"Average time per dataset: {(end_time - start_time) / args.n_datasets:.4f} seconds")
+    logger.info(f"Finished generating {args.n_datasets} datasets in {end_time - start_time:.2f} seconds")

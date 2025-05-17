@@ -10,7 +10,8 @@
 # Configuration 1: Direct mapping with minimal noise
 echo "Config 1: Direct mapping, minimal noise..."
 python generate_data.py \
-       --n_datasets 5 \
+       --n_datasets 10 \
+       --n_gpus 1 \
        --prior mlp_scm \
        --min_features 20 \
        --max_features 100 \
@@ -31,7 +32,8 @@ python generate_data.py \
 # Configuration 2: Causal with strong dependencies
 echo "Config 2: Causal mode, strong dependencies..."
 python generate_data.py \
-       --n_datasets 5 \
+       --n_datasets 10 \
+       --n_gpus 1 \
        --prior mlp_scm \
        --min_features 20 \
        --max_features 100 \
@@ -52,8 +54,9 @@ python generate_data.py \
 # Configuration 3: Moderate noise, fewer layers
 echo "Config 3: Moderate noise, simple structure..."
 python generate_data.py \
-       --n_datasets 5 \
+       --n_datasets 10 \
        --prior mlp_scm \
+       --n_gpus 1 \
        --min_features 20 \
        --max_features 100 \
        --min_seq 1000 \
@@ -73,8 +76,9 @@ python generate_data.py \
 # Configuration 4: Tree-based with low noise
 echo "Config 4: Tree-based, low noise..."
 python generate_data.py \
-       --n_datasets 5 \
+       --n_datasets 10 \
        --prior tree_scm \
+       --n_gpus 1 \
        --min_features 20 \
        --max_features 100 \
        --min_seq 1000 \
@@ -94,8 +98,9 @@ python generate_data.py \
 # Configuration 5: No noise baseline (sanity check)
 echo "Config 5: No noise baseline..."
 python generate_data.py \
-       --n_datasets 5 \
+       --n_datasets 10 \
        --prior mlp_scm \
+       --n_gpus 1 \
        --min_features 20 \
        --max_features 50 \
        --min_seq 1000 \
