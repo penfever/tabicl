@@ -40,11 +40,18 @@ class DeterministicTreeLayer(nn.Module):
         The desired output dimension for the transformed features.
     
     swap_prob : float
-        Probability of swapping any pair of targets (0.0 = deterministic, 1.0 = very noisy)
+        Probability/intensity of noise injection (0.0 = deterministic, 1.0 = very noisy)
     
     transform_type : str
-        Type of deterministic transformation to apply before swapping.
+        Type of deterministic transformation to apply before noise.
         Options: "polynomial", "trigonometric", "exponential", "mixed"
+    
+    noise_type : str
+        Type of noise injection to apply:
+        - "swap": Randomly swap pairs of targets (original behavior)
+        - "corrupt": Add Gaussian noise to randomly selected targets
+        - "boundary_blur": Add noise to samples near decision boundaries
+        - "mixed": Combine multiple noise types for stronger randomization
     
     device : str or torch.device
         The device ('cpu' or 'cuda') on which to place the output tensor.
@@ -57,12 +64,14 @@ class DeterministicTreeLayer(nn.Module):
                  out_dim: int,
                  swap_prob: float = 0.1,
                  transform_type: str = "polynomial",
-                 device: str = "cpu"):
+                 device: str = "cpu",
+                 noise_type: str = "swap"):
         super(DeterministicTreeLayer, self).__init__()
         self.out_dim = out_dim
         self.swap_prob = swap_prob
         self.transform_type = transform_type
         self.device = device
+        self.noise_type = noise_type
         
         # Adaptive complexity based on swap probability
         if swap_prob > 0.15:
@@ -153,43 +162,88 @@ class DeterministicTreeLayer(nn.Module):
             
         return y
     
-    def _swap_targets(self, y: np.ndarray) -> np.ndarray:
-        """Randomly swap pairs of targets with probability swap_prob, limited to n_classes swaps."""
+    def _inject_noise(self, y: np.ndarray) -> np.ndarray:
+        """Inject various types of noise into targets based on noise_type and swap_prob."""
         if self.swap_prob == 0.0:
             return y
             
-        y_swapped = y.copy()
+        y_noisy = y.copy()
         n_samples = y.shape[0]
         
-        # For regression targets, estimate n_classes as square root of n_samples
-        # For classification, would use actual unique values
-        n_classes = int(np.sqrt(n_samples))
-        
-        # Calculate the expected number of swaps based on swap_prob
-        # Limited to n_classes maximum
-        expected_swaps = min(int(self.swap_prob * n_samples / 2), n_classes)
-        
-        if expected_swaps == 0:
-            return y
+        if self.noise_type == "swap":
+            # Original swapping logic
+            n_classes = int(np.sqrt(n_samples))
+            expected_swaps = min(int(self.swap_prob * n_samples / 2), n_classes)
             
-        # Generate random pairs of indices to swap
-        np.random.seed(None)  # Use random seed for true randomness
-        
-        # Randomly select pairs to swap
-        all_indices = np.arange(n_samples)
-        np.random.shuffle(all_indices)
-        
-        # Perform the limited number of swaps
-        swaps_made = 0
-        for i in range(0, min(n_samples - 1, expected_swaps * 2), 2):
-            if swaps_made >= expected_swaps:
-                break
+            if expected_swaps == 0:
+                return y
                 
-            idx1, idx2 = all_indices[i], all_indices[i + 1]
-            y_swapped[idx1], y_swapped[idx2] = y_swapped[idx2].copy(), y_swapped[idx1].copy()
-            swaps_made += 1
+            all_indices = np.arange(n_samples)
+            np.random.shuffle(all_indices)
             
-        return y_swapped
+            swaps_made = 0
+            for i in range(0, min(n_samples - 1, expected_swaps * 2), 2):
+                if swaps_made >= expected_swaps:
+                    break
+                    
+                idx1, idx2 = all_indices[i], all_indices[i + 1]
+                y_noisy[idx1], y_noisy[idx2] = y_noisy[idx2].copy(), y_noisy[idx1].copy()
+                swaps_made += 1
+                
+        elif self.noise_type == "corrupt":
+            # Randomly corrupt a fraction of targets
+            n_corrupt = int(self.swap_prob * n_samples)
+            corrupt_indices = np.random.choice(n_samples, n_corrupt, replace=False)
+            
+            # For regression: add noise proportional to the standard deviation
+            for idx in corrupt_indices:
+                noise_scale = np.std(y) * np.random.uniform(0.5, 2.0)
+                y_noisy[idx] += np.random.randn(*y[idx].shape) * noise_scale
+                
+        elif self.noise_type == "boundary_blur":
+            # Blur decision boundaries by adding noise near boundary regions
+            # Identify samples near decision boundaries (middle quantiles)
+            for dim in range(y.shape[1]):
+                sorted_indices = np.argsort(y[:, dim])
+                middle_start = int(0.3 * n_samples)
+                middle_end = int(0.7 * n_samples)
+                boundary_indices = sorted_indices[middle_start:middle_end]
+                
+                # Add noise to boundary samples
+                n_blur = int(self.swap_prob * len(boundary_indices))
+                blur_indices = np.random.choice(boundary_indices, n_blur, replace=False)
+                
+                noise_scale = np.std(y[:, dim]) * 0.3
+                y_noisy[blur_indices, dim] += np.random.randn(n_blur) * noise_scale
+                
+        elif self.noise_type == "mixed":
+            # Apply multiple noise types
+            # First apply swapping
+            if self.swap_prob > 0.3:
+                # For high noise, use corruption instead of swapping
+                y_noisy = self._inject_noise_with_type(y, "corrupt", self.swap_prob * 0.7)
+            else:
+                y_noisy = self._inject_noise_with_type(y, "swap", self.swap_prob * 0.5)
+            
+            # Then apply boundary blurring
+            y_noisy = self._inject_noise_with_type(y_noisy, "boundary_blur", self.swap_prob * 0.3)
+            
+        return y_noisy
+    
+    def _inject_noise_with_type(self, y: np.ndarray, noise_type: str, prob: float) -> np.ndarray:
+        """Helper function to inject specific noise type with given probability."""
+        original_noise_type = self.noise_type
+        original_prob = self.swap_prob
+        
+        self.noise_type = noise_type
+        self.swap_prob = prob
+        
+        result = self._inject_noise(y)
+        
+        self.noise_type = original_noise_type
+        self.swap_prob = original_prob
+        
+        return result
     
     def forward(self, X):
         """Applies the deterministic tree-based transformation with controlled noise."""
@@ -204,8 +258,8 @@ class DeterministicTreeLayer(nn.Module):
         # Generate deterministic targets
         y_deterministic = self._generate_deterministic_targets(X_tensor)
         
-        # Apply controlled swapping
-        y_targets = self._swap_targets(y_deterministic)
+        # Apply controlled noise injection
+        y_targets = self._inject_noise(y_deterministic)
         
         # Fit tree model
         self.model.fit(X_np, y_targets)
@@ -312,6 +366,7 @@ class DeterministicTreeSCM(nn.Module):
                  min_swap_prob: float = 0.0,
                  max_swap_prob: float = 0.2,
                  transform_type: str = "polynomial",
+                 noise_type: str = "swap",
                  sampling: str = "normal",
                  pre_sample_cause_stats: bool = False,
                  noise_std: float = 0.001,
@@ -337,6 +392,7 @@ class DeterministicTreeSCM(nn.Module):
         self.min_swap_prob = min_swap_prob
         self.max_swap_prob = max_swap_prob
         self.transform_type = transform_type
+        self.noise_type = noise_type
         self.sampling = sampling
         self.pre_sample_cause_stats = pre_sample_cause_stats
         self.noise_std = noise_std
@@ -383,6 +439,7 @@ class DeterministicTreeSCM(nn.Module):
             swap_prob=swap_prob,
             transform_type=self.transform_type,
             device=self.device,
+            noise_type=self.noise_type,
         )
         
         if self.pre_sample_noise_std:

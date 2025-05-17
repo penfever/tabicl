@@ -86,6 +86,8 @@ def generate_single_gpu(args):
         hp_overrides['max_swap_prob'] = args.max_swap_prob
     if args.transform_type is not None:
         hp_overrides['transform_type'] = args.transform_type
+    if args.noise_type is not None:
+        hp_overrides['noise_type'] = args.noise_type
     
     # Merge overrides with default fixed_hp
     from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
@@ -203,6 +205,8 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
         hp_overrides['max_swap_prob'] = args.max_swap_prob
     if args.transform_type is not None:
         hp_overrides['transform_type'] = args.transform_type
+    if args.noise_type is not None:
+        hp_overrides['noise_type'] = args.noise_type
     
     # Merge overrides with default fixed_hp
     from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
@@ -417,6 +421,9 @@ def get_args():
     ap.add_argument("--transform_type", type=str, default="polynomial",
                     choices=["polynomial", "trigonometric", "exponential", "mixed"],
                     help="type of deterministic transformation for deterministic tree SCM")
+    ap.add_argument("--noise_type", type=str, default="swap",
+                    choices=["swap", "corrupt", "boundary_blur", "mixed"],
+                    help="type of noise injection for deterministic tree SCM")
     
     # Multi-GPU specific arguments
     ap.add_argument("--num_gpus", type=int, default=-1,
