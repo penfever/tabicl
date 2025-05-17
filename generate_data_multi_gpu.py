@@ -1,24 +1,22 @@
+#!/usr/bin/env python3
+"""
+Multi-GPU data generation script for TabICL.
+
+This script allows parallel generation of synthetic datasets across multiple GPUs,
+significantly improving generation speed for large dataset creation.
+"""
+
 import argparse
 import pathlib
 import os
 import time
-from typing import Tuple
+from typing import List, Tuple
 import numpy as np
 import torch
 import torch.multiprocessing as mp
 from torch.distributed import init_process_group, destroy_process_group
 from tqdm.auto import tqdm
 from tabicl.prior.dataset import PriorDataset
-
-
-def to_npy(arr: np.ndarray, path: pathlib.Path):
-    np.save(path, arr, allow_pickle=False)
-
-def to_csv(arr: np.ndarray, path: pathlib.Path):
-    np.savetxt(path, arr, delimiter=",", fmt="%s")
-
-def tensor_to_numpy(t: torch.Tensor) -> np.ndarray:
-    return t.cpu().numpy()
 
 
 def setup_distributed(rank: int, world_size: int, backend: str = "nccl"):
@@ -36,6 +34,10 @@ def cleanup_distributed():
     destroy_process_group()
 
 
+def tensor_to_numpy(t: torch.Tensor) -> np.ndarray:
+    return t.cpu().numpy()
+
+
 def get_dataset_split(total_datasets: int, rank: int, world_size: int) -> Tuple[int, int]:
     """Calculate the dataset range for this rank."""
     datasets_per_rank = total_datasets // world_size
@@ -49,88 +51,6 @@ def get_dataset_split(total_datasets: int, rank: int, world_size: int) -> Tuple[
         count = datasets_per_rank
     
     return start, count
-
-def generate_single_gpu(args):
-    """Single-GPU generation function (original behavior)."""
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    
-    # Build hyperparameter overrides
-    hp_overrides = {}
-    if args.is_causal is not None:
-        hp_overrides['is_causal'] = args.is_causal
-    if args.y_is_effect is not None:
-        hp_overrides['y_is_effect'] = args.y_is_effect
-    if args.in_clique is not None:
-        hp_overrides['in_clique'] = args.in_clique
-    if args.num_layers is not None:
-        hp_overrides['num_layers'] = args.num_layers
-    if args.num_causes is not None:
-        hp_overrides['num_causes'] = args.num_causes
-    if args.noise_std is not None:
-        hp_overrides['noise_std'] = args.noise_std
-    if args.pre_sample_noise_std is not None:
-        hp_overrides['pre_sample_noise_std'] = args.pre_sample_noise_std
-    
-    ds = PriorDataset(
-        batch_size=args.inner_bsz,
-        batch_size_per_gp=1,
-        batch_size_per_subgp=1,
-        prior_type=args.prior,
-        min_features=args.min_features,
-        max_features=args.max_features,
-        min_classes=args.min_classes,
-        max_classes=args.max_classes,
-        min_seq_len=args.min_seq,
-        max_seq_len=args.max_seq,
-        log_seq_len=args.log_seq,
-        replay_small=args.replay_small,
-        seq_len_per_gp=args.seq_len_per_gp,
-        n_jobs=1,
-        num_threads_per_generate=2,
-        device=device,
-        min_imbalance_ratio=args.min_imbalance_ratio,
-        max_imbalance_ratio=args.max_imbalance_ratio,
-        hp_overrides=hp_overrides,
-    )
-    print(f"PriorDataset ready (prior={args.prior}). "
-          f"Requesting first batch …")
-
-    produced = 0
-    uid_gen  = (f"{i:06}" for i in range(1, args.n_datasets + 1))
-    pbar = tqdm(total=args.n_datasets, unit="ep", desc="Generating")
-
-    for batch in ds:  # PriorDataset is already an iterable
-        # batch is a tuple: (X, y, _, seq_len, train_size)
-        X_batch, y_batch = batch[0], batch[1]
-
-        # NestedTensor → list of Tensors; ordinary Tensor → split on dim‑0
-        if hasattr(X_batch, "unbind"):
-            X_list = [tensor_to_numpy(t) for t in X_batch.unbind()]
-            y_list = [tensor_to_numpy(t) for t in y_batch.unbind()]
-        else:
-            X_list = [tensor_to_numpy(t) for t in X_batch]
-            y_list = [tensor_to_numpy(t) for t in y_batch]
-
-        for Xi, yi in zip(X_list, y_list):
-            ep_id = next(uid_gen)
-            base = args.out_dir / f"episode_{ep_id}"
-            
-            # Save numpy files
-            np.save(base.parent / f"{base.name}_X.npy", Xi, allow_pickle=False)
-            np.save(base.parent / f"{base.name}_y.npy", yi, allow_pickle=False)
-            
-            # Save CSV files if requested
-            if args.save_csv:
-                np.savetxt(base.parent / f"{base.name}_X.csv", Xi, delimiter=",", fmt="%s")
-                np.savetxt(base.parent / f"{base.name}_y.csv", yi, delimiter=",", fmt="%s")
-
-            produced += 1
-            pbar.update(1)
-            if produced == 1:
-                print("First episode written — generation confirmed")
-            if produced == args.n_datasets:
-                pbar.close()
-                return
 
 
 def generate_worker(rank: int, world_size: int, args, start_idx: int):
@@ -256,11 +176,9 @@ def generate_multi_gpu(args):
     
     if world_size == 0:
         print("No GPUs available. Falling back to CPU generation.")
-        return generate_single_gpu(args)
-    
-    if world_size == 1:
-        print("Single GPU detected. Using single-GPU generation.")
-        return generate_single_gpu(args)
+        # Fall back to single device generation
+        import tabicl.generate_data as single_gpu
+        return single_gpu.generate(args)
     
     print(f"Using {world_size} GPUs for data generation")
     
@@ -285,17 +203,10 @@ def generate_multi_gpu(args):
         p.join()
 
 
-def generate(args):
-    """Main generation function that dispatches to single or multi-GPU."""
-    if args.num_gpus == 0:
-        # Force single-GPU/CPU mode
-        return generate_single_gpu(args)
-    else:
-        # Use multi-GPU if available
-        return generate_multi_gpu(args)
-
 def get_args():
-    ap = argparse.ArgumentParser()
+    ap = argparse.ArgumentParser(
+        description="Multi-GPU synthetic data generation for TabICL"
+    )
     ap.add_argument("--n_datasets", type=int, required=True,
                     help="number of synthetic episodes to generate")
     ap.add_argument("--prior", default="mix_scm",
@@ -348,13 +259,14 @@ def get_args():
     
     # Multi-GPU specific arguments
     ap.add_argument("--num_gpus", type=int, default=-1,
-                    help="number of GPUs to use (-1 for all available, 0 for CPU only)")
+                    help="number of GPUs to use (-1 for all available)")
     ap.add_argument("--save_csv", action="store_true",
                     help="also save data as CSV files (slower but more accessible)")
     ap.add_argument("--master_port", type=str, default="29500",
                     help="master port for distributed training")
     
     return ap.parse_args()
+
 
 if __name__ == "__main__":
     args = get_args()
@@ -365,7 +277,7 @@ if __name__ == "__main__":
     os.environ['MASTER_PORT'] = args.master_port
     
     start_time = time.time()
-    generate(args)
+    generate_multi_gpu(args)
     end_time = time.time()
     
     print(f"\nFinished generating {args.n_datasets} datasets in {end_time - start_time:.2f} seconds")
