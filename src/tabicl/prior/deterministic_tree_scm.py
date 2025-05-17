@@ -207,21 +207,8 @@ class DeterministicTreeLayer(nn.Module):
         # Apply controlled swapping
         y_targets = self._swap_targets(y_deterministic)
         
-        # Fit tree model with early stopping for XGBoost
-        if isinstance(self.model, XGBRegressor):
-            # Use validation set for early stopping
-            val_split = int(0.8 * len(X_np))
-            X_train, X_val = X_np[:val_split], X_np[val_split:]
-            y_train, y_val = y_targets[:val_split], y_targets[val_split:]
-            
-            self.model.fit(
-                X_train, y_train,
-                eval_set=[(X_val, y_val)],
-                verbose=False,
-                early_stopping_rounds=10
-            )
-        else:
-            self.model.fit(X_np, y_targets)
+        # Fit tree model
+        self.model.fit(X_np, y_targets)
         
         # Predict (this will learn the potentially swapped patterns)
         y = self.model.predict(X_np)
