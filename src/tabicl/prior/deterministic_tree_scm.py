@@ -160,19 +160,25 @@ class DeterministicTreeLayer(nn.Module):
     
     def forward(self, X):
         """Applies the deterministic tree-based transformation with controlled noise."""
-        X = X.nan_to_num(0.0).cpu()
+        # Handle tensor conversion
+        if isinstance(X, torch.Tensor):
+            X_tensor = X.nan_to_num(0.0)
+            X_np = X_tensor.cpu().numpy()
+        else:
+            X_np = X
+            X_tensor = torch.tensor(X, dtype=torch.float, device=self.device)
         
         # Generate deterministic targets
-        y_deterministic = self._generate_deterministic_targets(X)
+        y_deterministic = self._generate_deterministic_targets(X_tensor)
         
         # Apply controlled swapping
         y_targets = self._swap_targets(y_deterministic)
         
         # Fit tree model
-        self.model.fit(X, y_targets)
+        self.model.fit(X_np, y_targets)
         
         # Predict (this will learn the potentially swapped patterns)
-        y = self.model.predict(X)
+        y = self.model.predict(X_np)
         y = torch.tensor(y, dtype=torch.float, device=self.device)
         
         if self.out_dim == 1:
@@ -313,17 +319,22 @@ class DeterministicTreeSCM(nn.Module):
         
         # Define the input sampler
         self.xsampler = XSampler(
-            output_dim=(self.seq_len, self.num_causes),
-            type=self.sampling,
-            pre_sample_normal_stats=self.pre_sample_cause_stats,
+            seq_len=self.seq_len,
+            num_features=self.num_causes,
+            pre_stats=self.pre_sample_cause_stats,
+            sampling=self.sampling,
             device=self.device,
         )
         
         # Build layers
-        self.layers = nn.ModuleList([self._make_layer(self.num_causes, self.hidden_dim)])
-        for _ in range(self.num_layers - 2):
-            self.layers.append(self._make_layer(self.hidden_dim, self.hidden_dim))
-        if self.num_layers > 1:
+        if self.num_layers == 1:
+            # Single layer: directly from causes to outputs
+            self.layers = nn.ModuleList([self._make_layer(self.num_causes, self.num_outputs)])
+        else:
+            # Multiple layers: causes -> hidden -> ... -> outputs
+            self.layers = nn.ModuleList([self._make_layer(self.num_causes, self.hidden_dim)])
+            for _ in range(self.num_layers - 2):
+                self.layers.append(self._make_layer(self.hidden_dim, self.hidden_dim))
             self.layers.append(self._make_layer(self.hidden_dim, self.num_outputs))
     
     def _make_layer(self, in_dim: int, out_dim: int) -> nn.Module:
