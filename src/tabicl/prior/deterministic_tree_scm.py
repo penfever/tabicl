@@ -93,19 +93,38 @@ class DeterministicTreeLayer(nn.Module):
                 RandomForestRegressor(n_estimators=self.n_estimators, max_depth=self.max_depth), n_jobs=-1
             )
         elif tree_model == "xgboost":
-            self.model = XGBRegressor(
-                n_estimators=self.n_estimators,
-                max_depth=self.max_depth,
-                tree_method="hist",
-                multi_strategy="multi_output_tree",
-                n_jobs=-1,
-                learning_rate=0.3,
-                verbosity=0,
-                subsample=0.8,
-                colsample_bytree=0.8,
-                reg_alpha=0.01,
-                reg_lambda=0.01,
-            )
+            # Adjust parameters based on noise level
+            if self.swap_prob > 0.3:
+                # For high noise, use more aggressive regularization and simpler models
+                self.model = XGBRegressor(
+                    n_estimators=min(self.n_estimators, 30),
+                    max_depth=min(self.max_depth, 2),
+                    tree_method="hist",
+                    multi_strategy="multi_output_tree",
+                    n_jobs=-1,
+                    learning_rate=0.5,
+                    verbosity=0,
+                    subsample=0.6,
+                    colsample_bytree=0.6,
+                    reg_alpha=0.1,
+                    reg_lambda=0.1,
+                    max_bin=128,  # Reduce histogram bins for speed
+                )
+            else:
+                self.model = XGBRegressor(
+                    n_estimators=self.n_estimators,
+                    max_depth=self.max_depth,
+                    tree_method="hist",
+                    multi_strategy="multi_output_tree",
+                    n_jobs=-1,
+                    learning_rate=0.3,
+                    verbosity=0,
+                    subsample=0.8,
+                    colsample_bytree=0.8,
+                    reg_alpha=0.01,
+                    reg_lambda=0.01,
+                    max_bin=256,
+                )
         else:
             raise ValueError(f"Invalid tree model: {tree_model}")
     
@@ -171,62 +190,100 @@ class DeterministicTreeLayer(nn.Module):
         n_samples = y.shape[0]
         
         if self.noise_type == "swap":
-            # Original swapping logic
+            # Original swapping logic - optimized version
             n_classes = int(np.sqrt(n_samples))
             expected_swaps = min(int(self.swap_prob * n_samples / 2), n_classes)
             
             if expected_swaps == 0:
                 return y
                 
-            all_indices = np.arange(n_samples)
-            np.random.shuffle(all_indices)
+            # Vectorized swapping
+            indices = np.arange(n_samples)
+            np.random.shuffle(indices)
             
-            swaps_made = 0
-            for i in range(0, min(n_samples - 1, expected_swaps * 2), 2):
-                if swaps_made >= expected_swaps:
-                    break
-                    
-                idx1, idx2 = all_indices[i], all_indices[i + 1]
-                y_noisy[idx1], y_noisy[idx2] = y_noisy[idx2].copy(), y_noisy[idx1].copy()
-                swaps_made += 1
+            # Select pairs to swap
+            n_pairs_to_swap = min(expected_swaps, n_samples // 2)
+            swap_idx1 = indices[:n_pairs_to_swap]
+            swap_idx2 = indices[n_pairs_to_swap:2*n_pairs_to_swap]
+            
+            # Perform swaps
+            y_noisy[swap_idx1], y_noisy[swap_idx2] = y_noisy[swap_idx2].copy(), y_noisy[swap_idx1].copy()
                 
         elif self.noise_type == "corrupt":
             # Randomly corrupt a fraction of targets
             n_corrupt = int(self.swap_prob * n_samples)
-            corrupt_indices = np.random.choice(n_samples, n_corrupt, replace=False)
-            
-            # For regression: add noise proportional to the standard deviation
-            for idx in corrupt_indices:
-                noise_scale = np.std(y) * np.random.uniform(0.5, 2.0)
-                y_noisy[idx] += np.random.randn(*y[idx].shape) * noise_scale
+            if n_corrupt > 0:
+                corrupt_indices = np.random.choice(n_samples, n_corrupt, replace=False)
+                
+                # Vectorized noise generation for efficiency
+                noise_scales = np.std(y) * np.random.uniform(0.5, 2.0, size=(n_corrupt, 1))
+                noise = np.random.randn(n_corrupt, y.shape[1]) * noise_scales
+                y_noisy[corrupt_indices] += noise
                 
         elif self.noise_type == "boundary_blur":
             # Blur decision boundaries by adding noise near boundary regions
-            # Identify samples near decision boundaries (middle quantiles)
-            for dim in range(y.shape[1]):
+            # Process all dimensions more efficiently
+            n_dims = y.shape[1]
+            
+            # Pre-allocate lists for batch processing
+            all_blur_indices = []
+            all_dims = []
+            all_noise_scales = []
+            
+            for dim in range(n_dims):
                 sorted_indices = np.argsort(y[:, dim])
                 middle_start = int(0.3 * n_samples)
                 middle_end = int(0.7 * n_samples)
                 boundary_indices = sorted_indices[middle_start:middle_end]
                 
-                # Add noise to boundary samples
                 n_blur = int(self.swap_prob * len(boundary_indices))
-                blur_indices = np.random.choice(boundary_indices, n_blur, replace=False)
+                if n_blur > 0:
+                    blur_indices = np.random.choice(boundary_indices, n_blur, replace=False)
+                    all_blur_indices.extend(blur_indices)
+                    all_dims.extend([dim] * n_blur)
+                    all_noise_scales.extend([np.std(y[:, dim]) * 0.3] * n_blur)
+            
+            # Apply noise in a single vectorized operation
+            if all_blur_indices:
+                all_blur_indices = np.array(all_blur_indices)
+                all_dims = np.array(all_dims)
+                all_noise_scales = np.array(all_noise_scales)
                 
-                noise_scale = np.std(y[:, dim]) * 0.3
-                y_noisy[blur_indices, dim] += np.random.randn(n_blur) * noise_scale
+                noise = np.random.randn(len(all_blur_indices)) * all_noise_scales
+                y_noisy[all_blur_indices, all_dims] += noise
                 
         elif self.noise_type == "mixed":
-            # Apply multiple noise types
-            # First apply swapping
+            # Apply multiple noise types - optimized to avoid recursive calls
             if self.swap_prob > 0.3:
-                # For high noise, use corruption instead of swapping
-                y_noisy = self._inject_noise_with_type(y, "corrupt", self.swap_prob * 0.7)
+                # For high noise, use corruption
+                n_corrupt = int(self.swap_prob * 0.7 * n_samples)
+                if n_corrupt > 0:
+                    corrupt_indices = np.random.choice(n_samples, n_corrupt, replace=False)
+                    noise_scales = np.std(y) * np.random.uniform(0.5, 2.0, size=(n_corrupt, 1))
+                    noise = np.random.randn(n_corrupt, y.shape[1]) * noise_scales
+                    y_noisy[corrupt_indices] += noise
             else:
-                y_noisy = self._inject_noise_with_type(y, "swap", self.swap_prob * 0.5)
+                # For low noise, use swapping
+                expected_swaps = min(int(self.swap_prob * 0.5 * n_samples / 2), int(np.sqrt(n_samples)))
+                if expected_swaps > 0:
+                    indices = np.arange(n_samples)
+                    np.random.shuffle(indices)
+                    n_pairs_to_swap = min(expected_swaps, n_samples // 2)
+                    swap_idx1 = indices[:n_pairs_to_swap]
+                    swap_idx2 = indices[n_pairs_to_swap:2*n_pairs_to_swap]
+                    y_noisy[swap_idx1], y_noisy[swap_idx2] = y_noisy[swap_idx2].copy(), y_noisy[swap_idx1].copy()
             
-            # Then apply boundary blurring
-            y_noisy = self._inject_noise_with_type(y_noisy, "boundary_blur", self.swap_prob * 0.3)
+            # Apply light boundary blurring
+            blur_prob = self.swap_prob * 0.2
+            n_dims = y.shape[1]
+            blur_fraction = int(blur_prob * n_samples * 0.4)  # 40% are in boundaries
+            
+            if blur_fraction > 0:
+                # Simple version - blur random samples near median
+                for dim in range(n_dims):
+                    blur_indices = np.random.choice(n_samples, blur_fraction, replace=False)
+                    noise_scale = np.std(y[:, dim]) * 0.2
+                    y_noisy[blur_indices, dim] += np.random.randn(blur_fraction) * noise_scale
             
         return y_noisy
     
