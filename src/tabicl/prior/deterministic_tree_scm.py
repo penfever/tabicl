@@ -59,30 +59,43 @@ class DeterministicTreeLayer(nn.Module):
                  transform_type: str = "polynomial",
                  device: str = "cpu"):
         super(DeterministicTreeLayer, self).__init__()
-        self.max_depth = max_depth
-        self.n_estimators = n_estimators
         self.out_dim = out_dim
         self.swap_prob = swap_prob
         self.transform_type = transform_type
         self.device = device
         
+        # Adaptive complexity based on swap probability
+        if swap_prob > 0.15:
+            # Use simpler model for more noisy data
+            self.max_depth = min(max_depth, 3)
+            self.n_estimators = min(n_estimators, 50)
+        else:
+            self.max_depth = max_depth
+            self.n_estimators = n_estimators
+        
         if tree_model == "decision_tree":
-            self.model = MultiOutputRegressor(DecisionTreeRegressor(max_depth=max_depth), n_jobs=-1)
+            self.model = MultiOutputRegressor(DecisionTreeRegressor(max_depth=self.max_depth), n_jobs=-1)
         elif tree_model == "extra_trees":
             self.model = MultiOutputRegressor(
-                ExtraTreesRegressor(n_estimators=n_estimators, max_depth=max_depth), n_jobs=-1
+                ExtraTreesRegressor(n_estimators=self.n_estimators, max_depth=self.max_depth), n_jobs=-1
             )
         elif tree_model == "random_forest":
             self.model = MultiOutputRegressor(
-                RandomForestRegressor(n_estimators=n_estimators, max_depth=max_depth), n_jobs=-1
+                RandomForestRegressor(n_estimators=self.n_estimators, max_depth=self.max_depth), n_jobs=-1
             )
         elif tree_model == "xgboost":
             self.model = XGBRegressor(
-                n_estimators=n_estimators,
-                max_depth=max_depth,
+                n_estimators=self.n_estimators,
+                max_depth=self.max_depth,
                 tree_method="hist",
                 multi_strategy="multi_output_tree",
                 n_jobs=-1,
+                learning_rate=0.3,
+                verbosity=0,
+                subsample=0.8,
+                colsample_bytree=0.8,
+                reg_alpha=0.01,
+                reg_lambda=0.01,
             )
         else:
             raise ValueError(f"Invalid tree model: {tree_model}")
@@ -141,20 +154,40 @@ class DeterministicTreeLayer(nn.Module):
         return y
     
     def _swap_targets(self, y: np.ndarray) -> np.ndarray:
-        """Randomly swap pairs of targets with probability swap_prob."""
+        """Randomly swap pairs of targets with probability swap_prob, limited to n_classes swaps."""
+        if self.swap_prob == 0.0:
+            return y
+            
         y_swapped = y.copy()
         n_samples = y.shape[0]
         
-        # For each potential pair, decide whether to swap
-        for i in range(0, n_samples - 1, 2):
-            if np.random.random() < self.swap_prob:
-                # Swap this pair
-                y_swapped[i], y_swapped[i + 1] = y_swapped[i + 1].copy(), y_swapped[i].copy()
+        # For regression targets, estimate n_classes as square root of n_samples
+        # For classification, would use actual unique values
+        n_classes = int(np.sqrt(n_samples))
+        
+        # Calculate the expected number of swaps based on swap_prob
+        # Limited to n_classes maximum
+        expected_swaps = min(int(self.swap_prob * n_samples / 2), n_classes)
+        
+        if expected_swaps == 0:
+            return y
+            
+        # Generate random pairs of indices to swap
+        np.random.seed(None)  # Use random seed for true randomness
+        
+        # Randomly select pairs to swap
+        all_indices = np.arange(n_samples)
+        np.random.shuffle(all_indices)
+        
+        # Perform the limited number of swaps
+        swaps_made = 0
+        for i in range(0, min(n_samples - 1, expected_swaps * 2), 2):
+            if swaps_made >= expected_swaps:
+                break
                 
-        # Handle odd number of samples - potentially swap with random other sample
-        if n_samples % 2 == 1 and np.random.random() < self.swap_prob:
-            other_idx = np.random.randint(0, n_samples - 1)
-            y_swapped[-1], y_swapped[other_idx] = y_swapped[other_idx].copy(), y_swapped[-1].copy()
+            idx1, idx2 = all_indices[i], all_indices[i + 1]
+            y_swapped[idx1], y_swapped[idx2] = y_swapped[idx2].copy(), y_swapped[idx1].copy()
+            swaps_made += 1
             
         return y_swapped
     
@@ -174,8 +207,21 @@ class DeterministicTreeLayer(nn.Module):
         # Apply controlled swapping
         y_targets = self._swap_targets(y_deterministic)
         
-        # Fit tree model
-        self.model.fit(X_np, y_targets)
+        # Fit tree model with early stopping for XGBoost
+        if isinstance(self.model, XGBRegressor):
+            # Use validation set for early stopping
+            val_split = int(0.8 * len(X_np))
+            X_train, X_val = X_np[:val_split], X_np[val_split:]
+            y_train, y_val = y_targets[:val_split], y_targets[val_split:]
+            
+            self.model.fit(
+                X_train, y_train,
+                eval_set=[(X_val, y_val)],
+                verbose=False,
+                early_stopping_rounds=10
+            )
+        else:
+            self.model.fit(X_np, y_targets)
         
         # Predict (this will learn the potentially swapped patterns)
         y = self.model.predict(X_np)
