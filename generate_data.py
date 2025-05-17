@@ -71,6 +71,20 @@ def generate_single_gpu(args):
     if args.pre_sample_noise_std is not None:
         hp_overrides['pre_sample_noise_std'] = args.pre_sample_noise_std
     
+    # Merge overrides with default fixed_hp
+    from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
+    fixed_hp = DEFAULT_FIXED_HP.copy()
+    
+    # Convert sampled values to fixed values by overriding them in fixed_hp
+    # and adding distributions with single values to sampled_hp
+    sampled_hp = DEFAULT_SAMPLED_HP.copy()
+    for key, value in hp_overrides.items():
+        # Add to fixed_hp so it won't be sampled
+        fixed_hp[key] = value
+        # Override the sampled distribution with a constant
+        if key in sampled_hp:
+            sampled_hp[key] = {"distribution": "meta_choice", "choice_values": [value]}
+    
     ds = PriorDataset(
         batch_size=args.inner_bsz,
         batch_size_per_gp=1,
@@ -90,7 +104,8 @@ def generate_single_gpu(args):
         device=device,
         min_imbalance_ratio=args.min_imbalance_ratio,
         max_imbalance_ratio=args.max_imbalance_ratio,
-        hp_overrides=hp_overrides,
+        fixed_hp=fixed_hp,
+        sampled_hp=sampled_hp,
     )
     print(f"PriorDataset ready (prior={args.prior}). "
           f"Requesting first batch …")
@@ -165,6 +180,20 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
     if args.pre_sample_noise_std is not None:
         hp_overrides['pre_sample_noise_std'] = args.pre_sample_noise_std
     
+    # Merge overrides with default fixed_hp
+    from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
+    fixed_hp = DEFAULT_FIXED_HP.copy()
+    
+    # Convert sampled values to fixed values by overriding them in fixed_hp
+    # and adding distributions with single values to sampled_hp
+    sampled_hp = DEFAULT_SAMPLED_HP.copy()
+    for key, value in hp_overrides.items():
+        # Add to fixed_hp so it won't be sampled
+        fixed_hp[key] = value
+        # Override the sampled distribution with a constant
+        if key in sampled_hp:
+            sampled_hp[key] = {"distribution": "meta_choice", "choice_values": [value]}
+    
     # Create dataset generator
     ds = PriorDataset(
         batch_size=args.inner_bsz,
@@ -185,7 +214,8 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
         device=device,
         min_imbalance_ratio=args.min_imbalance_ratio,
         max_imbalance_ratio=args.max_imbalance_ratio,
-        hp_overrides=hp_overrides,
+        fixed_hp=fixed_hp,
+        sampled_hp=sampled_hp,
     )
     
     if rank == 0:
