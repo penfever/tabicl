@@ -589,6 +589,9 @@ class SCMPrior(Prior):
             prior_cls = MLPSCM
         elif params["prior_type"] == "tree_scm":
             prior_cls = TreeSCM
+        elif params["prior_type"] == "deterministic_tree_scm":
+            from .deterministic_tree_scm import DeterministicTreeSCM
+            prior_cls = DeterministicTreeSCM
         else:
             raise ValueError(f"Unknown prior type {params['prior_type']}")
 

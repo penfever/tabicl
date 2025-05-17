@@ -79,6 +79,14 @@ def generate_single_gpu(args):
     if args.pre_sample_noise_std is not None:
         hp_overrides['pre_sample_noise_std'] = args.pre_sample_noise_std
     
+    # Deterministic Tree SCM specific parameters
+    if args.min_swap_prob is not None:
+        hp_overrides['min_swap_prob'] = args.min_swap_prob
+    if args.max_swap_prob is not None:
+        hp_overrides['max_swap_prob'] = args.max_swap_prob
+    if args.transform_type is not None:
+        hp_overrides['transform_type'] = args.transform_type
+    
     # Merge overrides with default fixed_hp
     from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
     fixed_hp = DEFAULT_FIXED_HP.copy()
@@ -187,6 +195,14 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
         hp_overrides['noise_std'] = args.noise_std
     if args.pre_sample_noise_std is not None:
         hp_overrides['pre_sample_noise_std'] = args.pre_sample_noise_std
+    
+    # Deterministic Tree SCM specific parameters
+    if args.min_swap_prob is not None:
+        hp_overrides['min_swap_prob'] = args.min_swap_prob
+    if args.max_swap_prob is not None:
+        hp_overrides['max_swap_prob'] = args.max_swap_prob
+    if args.transform_type is not None:
+        hp_overrides['transform_type'] = args.transform_type
     
     # Merge overrides with default fixed_hp
     from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
@@ -346,8 +362,8 @@ def get_args():
     ap.add_argument("--n_datasets", type=int, required=True,
                     help="number of synthetic episodes to generate")
     ap.add_argument("--prior", default="mix_scm",
-                    choices=["mlp_scm", "tree_scm", "mix_scm", "dummy"],
-                    help="'mix_scm' resamples the family episode‑wise")
+                    choices=["mlp_scm", "tree_scm", "mix_scm", "dummy", "deterministic_tree_scm"],
+                    help="'mix_scm' resamples the family episode‑wise, 'deterministic_tree_scm' creates learnable datasets")
     ap.add_argument("--min_features", type=int, default=5)
     ap.add_argument("--max_features", type=int, default=120)
     ap.add_argument("--min_seq", type=int, default=200)
@@ -392,6 +408,15 @@ def get_args():
                     help="pre-sample noise std for each layer")
     ap.add_argument("--no_pre_sample_noise_std", dest="pre_sample_noise_std", action="store_false",
                     help="use fixed noise std for all layers")
+    
+    # Deterministic Tree SCM specific parameters
+    ap.add_argument("--min_swap_prob", type=float, default=0.0,
+                    help="minimum probability of swapping target pairs in deterministic tree SCM")
+    ap.add_argument("--max_swap_prob", type=float, default=0.2,
+                    help="maximum probability of swapping target pairs in deterministic tree SCM")
+    ap.add_argument("--transform_type", type=str, default="polynomial",
+                    choices=["polynomial", "trigonometric", "exponential", "mixed"],
+                    help="type of deterministic transformation for deterministic tree SCM")
     
     # Multi-GPU specific arguments
     ap.add_argument("--num_gpus", type=int, default=-1,
