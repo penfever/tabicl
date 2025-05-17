@@ -1002,12 +1002,13 @@ class PriorDataset(IterableDataset):
         specific distributions to ensure model robustness on smaller datasets
 
     prior_type : str, default="mlp_scm"
-        Type of prior: 'mlp_scm' (default), 'tree_scm', 'mix_scm', or 'dummy'
+        Type of prior: 'mlp_scm' (default), 'tree_scm', 'mix_scm', 'deterministic_tree_scm', or 'dummy'
 
         1. SCM-based: Structural causal models with complex feature relationships
          - 'mlp_scm': MLP-based causal models
          - 'tree_scm': Tree-based causal models
          - 'mix_scm': Probabilistic mix of the above models
+         - 'deterministic_tree_scm': Tree-based with controlled noise for learnable datasets
 
         2. Dummy: Randomly generated datasets for debugging
 
@@ -1077,7 +1078,7 @@ class PriorDataset(IterableDataset):
                 min_imbalance_ratio=min_imbalance_ratio,
                 max_imbalance_ratio=max_imbalance_ratio,
             )
-        elif prior_type in ["mlp_scm", "tree_scm", "mix_scm"]:
+        elif prior_type in ["mlp_scm", "tree_scm", "mix_scm", "deterministic_tree_scm"]:
             self.prior = SCMPrior(
                 batch_size=batch_size,
                 batch_size_per_gp=batch_size_per_gp,
@@ -1104,7 +1105,7 @@ class PriorDataset(IterableDataset):
             )
         else:
             raise ValueError(
-                f"Unknown prior type '{prior_type}'. Available options: 'mlp_scm', 'tree_scm', 'mix_scm', or 'dummy'."
+                f"Unknown prior type '{prior_type}'. Available options: 'mlp_scm', 'tree_scm', 'mix_scm', 'deterministic_tree_scm', or 'dummy'."
             )
 
         self.batch_size = batch_size
