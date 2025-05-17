@@ -25,7 +25,8 @@ python generate_data.py \
        --num_layers 3 \
        --num_causes 10 \
        --noise_std 0.001 \
-       --no_pre_sample_noise_std
+       --no_pre_sample_noise_std \
+       --save_csv
 
 echo "Generating Tree-SCM data with strong causal relationships..."
 python generate_data.py \
@@ -45,25 +46,27 @@ python generate_data.py \
        --num_layers 3 \
        --num_causes 15 \
        --noise_std 0.0005 \
-       --no_pre_sample_noise_std
+       --no_pre_sample_noise_std \
+       --save_csv
 
 echo "Data generation complete!"
 
-# Optional: Generate test datasets with extreme settings for comparison
-# echo "Generating test data with very low noise..."
-# python generate_data.py \
-#        --n_datasets 5 \
-#        --prior mlp_scm \
-#        --min_features 10 \
-#        --max_features 50 \
-#        --min_seq 1000 \
-#        --max_seq 5000 \
-#        --max_classes 5 \
-#        --out_dir ../synth/test_low_noise \
-#        --inner_bsz 64 \
-#        --no_causal \
-#        --y_is_effect \
-#        --in_clique \
-#        --num_layers 2 \
-#        --num_causes 10 \
-#        --noise_std 0.0001
+# Optional: Test CSV generation with small dataset
+echo "Testing CSV generation with a small dataset..."
+python generate_data.py \
+       --n_datasets 1 \
+       --prior mlp_scm \
+       --min_features 10 \
+       --max_features 20 \
+       --min_seq 100 \
+       --max_seq 200 \
+       --max_classes 3 \
+       --out_dir ../synth/test_csv \
+       --inner_bsz 1 \
+       --no_causal \
+       --y_is_effect \
+       --in_clique \
+       --num_layers 2 \
+       --num_causes 5 \
+       --noise_std 0.0001 \
+       --save_csv

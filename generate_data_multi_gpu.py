@@ -167,8 +167,8 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
             
             # Save CSV files if requested
             if args.save_csv:
-                np.savetxt(base.parent / f"{base.name}_X.csv", Xi, delimiter=",", fmt="%s")
-                np.savetxt(base.parent / f"{base.name}_y.csv", yi, delimiter=",", fmt="%s")
+                np.savetxt(base.parent / f"{base.name}_X.csv", Xi, delimiter=",", fmt="%.6f")
+                np.savetxt(base.parent / f"{base.name}_y.csv", yi, delimiter=",", fmt="%d")
             
             produced += 1
             global_idx += 1

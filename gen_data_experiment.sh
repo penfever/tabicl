@@ -25,7 +25,8 @@ python generate_data.py \
        --num_layers 2 \
        --num_causes 10 \
        --noise_std 0.0001 \
-       --no_pre_sample_noise_std
+       --no_pre_sample_noise_std \
+       --save_csv
 
 # Configuration 2: Causal with strong dependencies
 echo "Config 2: Causal mode, strong dependencies..."
@@ -45,7 +46,8 @@ python generate_data.py \
        --num_layers 3 \
        --num_causes 15 \
        --noise_std 0.001 \
-       --no_pre_sample_noise_std
+       --no_pre_sample_noise_std \
+       --save_csv
 
 # Configuration 3: Moderate noise, fewer layers
 echo "Config 3: Moderate noise, simple structure..."
@@ -65,7 +67,8 @@ python generate_data.py \
        --num_layers 2 \
        --num_causes 20 \
        --noise_std 0.005 \
-       --no_pre_sample_noise_std
+       --no_pre_sample_noise_std \
+       --save_csv
 
 # Configuration 4: Tree-based with low noise
 echo "Config 4: Tree-based, low noise..."
@@ -85,7 +88,8 @@ python generate_data.py \
        --num_layers 2 \
        --num_causes 15 \
        --noise_std 0.001 \
-       --no_pre_sample_noise_std
+       --no_pre_sample_noise_std \
+       --save_csv
 
 # Configuration 5: No noise baseline (sanity check)
 echo "Config 5: No noise baseline..."
@@ -105,7 +109,8 @@ python generate_data.py \
        --num_layers 1 \
        --num_causes 10 \
        --noise_std 0.0 \
-       --no_pre_sample_noise_std
+       --no_pre_sample_noise_std \
+       --save_csv
 
 echo "Experiment generation complete!"
 echo "Test each configuration to see which produces the most learnable data."
