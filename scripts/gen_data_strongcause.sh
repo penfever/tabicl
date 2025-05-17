@@ -18,6 +18,10 @@ cd ..
 # pip install -e .
 # chmod +x gen_data_strongcause.sh
 # ./gen_data_strongcause.sh
+       # --y_is_effect \
+       # --num_causes 10 \
+    # --no_pre_sample_noise_std \
+
 
 echo "Generating SCM data with strong causal relationships..."
 python generate_data.py \
@@ -31,7 +35,7 @@ python generate_data.py \
        --min_classes 10 \
        --max_classes 10 \
        --replay_small \
-       --out_dir ../synth/tree_scm_strongcause_v3 \
+       --out_dir ../synth/tree_scm_strongcause_v4 \
        --inner_bsz 256 \
        --no_causal \
        --num_layers 2 \
@@ -40,9 +44,6 @@ python generate_data.py \
        --transform_type mixed \
        --noise_type mixed \
        --noise_std 0.001 \
-       # --y_is_effect \
        --in_clique \
-       # --num_causes 10 \
        --max_imbalance_ratio 2.5 \
-       # --no_pre_sample_noise_std \
        --save_csv
