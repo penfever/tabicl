@@ -6,21 +6,9 @@
 # pip install -e .
 # chmod +x gen_data_strongcause.sh
 # ./gen_data_strongcause.sh
-
-echo "Generating SCM data with strong causal relationships..."
-cd ..
-
-#!/bin/bash
-# Generate synthetic data with strong causal relationships for better learnability
-# Recommended settings to improve model performance
-
-# cd tabicl
-# pip install -e .
-# chmod +x gen_data_strongcause.sh
-# ./gen_data_strongcause.sh
-       # --y_is_effect \
-       # --num_causes 10 \
-    # --no_pre_sample_noise_std \
+# --y_is_effect \
+# --num_causes 10 \
+# --no_pre_sample_noise_std \
 
 
 echo "Generating SCM data with strong causal relationships..."
