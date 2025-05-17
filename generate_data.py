@@ -104,8 +104,8 @@ def generate_single_gpu(args):
         device=device,
         min_imbalance_ratio=args.min_imbalance_ratio,
         max_imbalance_ratio=args.max_imbalance_ratio,
-        fixed_hp=fixed_hp,
-        sampled_hp=sampled_hp,
+        scm_fixed_hp=fixed_hp,
+        scm_sampled_hp=sampled_hp,
     )
     print(f"PriorDataset ready (prior={args.prior}). "
           f"Requesting first batch …")
@@ -214,8 +214,8 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
         device=device,
         min_imbalance_ratio=args.min_imbalance_ratio,
         max_imbalance_ratio=args.max_imbalance_ratio,
-        fixed_hp=fixed_hp,
-        sampled_hp=sampled_hp,
+        scm_fixed_hp=fixed_hp,
+        scm_sampled_hp=sampled_hp,
     )
     
     if rank == 0:
