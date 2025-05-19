@@ -146,7 +146,7 @@ def test_all_combinations():
     print("=" * 45)
     
     # Define strategies
-    transform_types = ['polynomial', 'rbf', 'multi_modal', 'mixture']
+    transform_types = ['polynomial', 'rbf', 'multi_modal', 'mixture', 'balanced_clusters']
     assigner_types = ['rank', 'value', 'piecewise', 'random_region', 'step_function']
     
     results = {}

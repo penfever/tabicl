@@ -120,6 +120,96 @@ class DeterministicTreeLayer(nn.Module):
         # Pre-compute transformation weights for polynomial transformations
         self._precompute_transform_weights()
     
+    def _create_well_separated_centers(self, num_centers, n_features):
+        """Create cluster centers that are well-separated in feature space."""
+        centers = np.zeros((num_centers, n_features))
+        
+        # Create centers on a hypersphere with good separation
+        for i in range(num_centers):
+            # Use spherical coordinates for better separation
+            angles = np.random.uniform(0, 2*np.pi, size=n_features-1)
+            radius = 3.0 + np.random.uniform(-0.5, 0.5)  # Some variation in radius
+            
+            # Convert to Cartesian coordinates
+            center = np.zeros(n_features)
+            center[0] = radius * np.prod(np.cos(angles))
+            for j in range(1, n_features):
+                if j < n_features - 1:
+                    center[j] = radius * np.sin(angles[j-1]) * np.prod(np.cos(angles[j:]))
+                else:
+                    center[j] = radius * np.sin(angles[j-1])
+            
+            # Add some noise for variety
+            center += np.random.randn(n_features) * 0.2
+            centers[i] = center
+            
+        return centers
+    
+    def _create_balanced_weights(self, num_centers, out_dim):
+        """Create weights that promote balanced activation across centers."""
+        # Use orthogonal initialization for better distribution
+        weights = np.random.randn(num_centers, out_dim)
+        U, _, Vt = np.linalg.svd(weights, full_matrices=False)
+        weights = U @ Vt
+        return weights * 2.0  # Scale up for better separation
+    
+    def _create_multi_modal_centers(self, num_clusters, n_features):
+        """Create centers for multi-modal distribution with better separation."""
+        centers = np.zeros((num_clusters, n_features))
+        
+        # Create centers in a regular simplex for maximum separation
+        if n_features >= num_clusters - 1:
+            # Use simplex vertices for first dimensions
+            for i in range(num_clusters):
+                for j in range(min(num_clusters - 1, n_features)):
+                    if i == j:
+                        centers[i, j] = np.sqrt(2 * (j + 1) * j / ((j + 1) * (j + 2))) * 5.0
+                    elif i == j + 1:
+                        centers[i, j] = -1.0 / np.sqrt((j + 1) * (j + 2)) * 5.0
+                    elif i > j + 1:
+                        centers[i, j] = 0
+                # Add random variation in remaining dimensions
+                if n_features > num_clusters - 1:
+                    centers[i, num_clusters-1:] = np.random.randn(n_features - num_clusters + 1) * 0.5
+        else:
+            # Fall back to circular arrangement if not enough dimensions
+            for i in range(num_clusters):
+                angle = 2 * np.pi * i / num_clusters
+                centers[i, 0] = np.cos(angle) * 5.0
+                if n_features > 1:
+                    centers[i, 1] = np.sin(angle) * 5.0
+                if n_features > 2:
+                    centers[i, 2:] = np.random.randn(n_features - 2) * 0.5
+        
+        return centers
+    
+    def _create_balanced_cluster_centers(self, num_clusters, n_features):
+        """Create cluster centers optimized for balanced class distribution."""
+        # Use k-means++ style initialization for better spread
+        centers = np.zeros((num_clusters, n_features))
+        
+        # First center is random
+        centers[0] = np.random.randn(n_features) * 2.0
+        
+        # Each subsequent center is chosen to be far from existing centers
+        for i in range(1, num_clusters):
+            # Calculate distances to all existing centers
+            distances = np.zeros(1000)  # Sample many points
+            for j in range(1000):
+                candidate = np.random.randn(n_features) * 2.0
+                min_dist = float('inf')
+                for k in range(i):
+                    dist = np.linalg.norm(candidate - centers[k])
+                    min_dist = min(min_dist, dist)
+                distances[j] = min_dist
+            
+            # Choose point with maximum minimum distance
+            best_idx = np.argmax(distances)
+            np.random.seed(best_idx)  # Reproducible
+            centers[i] = np.random.randn(n_features) * 2.0
+        
+        return centers * 3.0  # Scale up for better separation
+    
     def _precompute_transform_weights(self):
         """Pre-compute weights for deterministic transformations to avoid redundant computations."""
         self._transform_weights = {}
@@ -134,24 +224,23 @@ class DeterministicTreeLayer(nn.Module):
                 ]
             }
         elif self.transform_type == "rbf":
+            # Create well-separated cluster centers
+            num_rbf_centers = self.hyperparams.get('num_classes', 5) * 2  # More centers than classes
             self._transform_weights_factory = lambda n_features: {
-                'centers': np.random.randn(self.out_dim * 10, n_features) * 2.0,  # Multiple centers per output
-                'gamma': 0.5 / (self.class_separability if hasattr(self, 'class_separability') else 1.0),
-                'weights': np.random.randn(self.out_dim * 10, self.out_dim)  # Weights for combining RBF outputs
+                'centers': self._create_well_separated_centers(num_rbf_centers, n_features),
+                'gamma': 0.25 / (self.class_separability if hasattr(self, 'class_separability') else 1.0),
+                'weights': self._create_balanced_weights(num_rbf_centers, self.out_dim),
+                'normalize': True
             }
         elif self.transform_type == "multi_modal":
             # Create explicit cluster centers matching desired number of classes
             num_clusters = self.hyperparams.get('num_classes', 5)
             self._transform_weights_factory = lambda n_features: {
-                'centers': np.array([
-                    np.random.randn(n_features) * 2.0 + 
-                    np.array([np.cos(2*np.pi*i/num_clusters), np.sin(2*np.pi*i/num_clusters)] + 
-                            [0]*(n_features-2)) * 3.0
-                    for i in range(num_clusters)
-                ] * max(1, self.out_dim // num_clusters)),  # Repeat centers if needed
-                'gamma': 1.0 / (self.class_separability if hasattr(self, 'class_separability') else 1.0),
-                'weights': np.random.randn(num_clusters * max(1, self.out_dim // num_clusters), self.out_dim),
-                'cluster_probs': np.ones(num_clusters) / num_clusters
+                'centers': self._create_multi_modal_centers(num_clusters, n_features),
+                'gamma': 0.5 / (self.class_separability if hasattr(self, 'class_separability') else 1.0),
+                'weights': self._create_balanced_weights(num_clusters, self.out_dim),
+                'cluster_probs': np.ones(num_clusters) / num_clusters,
+                'normalize': True
             }
         elif self.transform_type == "trigonometric":
             self._transform_weights_factory = lambda n_features: {
@@ -189,6 +278,16 @@ class DeterministicTreeLayer(nn.Module):
                     for _ in range(num_components)
                 ],
                 'mixture_weights': np.random.dirichlet(np.ones(num_components))
+            }
+        elif self.transform_type == "balanced_clusters":
+            # Specifically designed for balanced class generation
+            num_clusters = self.hyperparams.get('num_classes', 5)
+            self._transform_weights_factory = lambda n_features: {
+                'centers': self._create_balanced_cluster_centers(num_clusters, n_features),
+                'gamma': 0.3,  # Fixed gamma for consistent cluster sizes
+                'weights': np.eye(num_clusters, self.out_dim),  # Direct mapping to clusters
+                'balance_factor': 2.0,
+                'normalize': True
             }
         else:
             # Default to linear combination
@@ -239,6 +338,12 @@ class DeterministicTreeLayer(nn.Module):
             # Combine RBF activations with weights to produce outputs
             y = rbf_activations @ rbf_weights  # (n_samples, out_dim)
             
+            # Normalize outputs if specified
+            if weights.get('normalize', False):
+                y_mean = np.mean(y, axis=0, keepdims=True)
+                y_std = np.std(y, axis=0, keepdims=True) + 1e-8
+                y = (y - y_mean) / y_std
+            
         elif self.transform_type == "multi_modal":
             # Generate multi-modal outputs for better natural clustering
             centers = weights['centers']
@@ -263,7 +368,13 @@ class DeterministicTreeLayer(nn.Module):
                 for i in range(num_clusters):
                     mask = cluster_assignments == i
                     if np.any(mask):
-                        y[mask] += i * 5.0  # Add cluster-specific offset
+                        y[mask] += i * 2.0  # Smaller offset after normalization
+            
+            # Normalize outputs if specified
+            if weights.get('normalize', False):
+                y_mean = np.mean(y, axis=0, keepdims=True)
+                y_std = np.std(y, axis=0, keepdims=True) + 1e-8
+                y = (y - y_mean) / y_std
                     
         elif self.transform_type == "trigonometric":
             # Vectorized trigonometric transformation
@@ -352,6 +463,50 @@ class DeterministicTreeLayer(nn.Module):
                     mask = component_assignments == i
                     if np.any(mask):
                         y[mask] += i * 3.0
+                        
+        elif self.transform_type == "balanced_clusters":
+            # Balanced cluster generation
+            centers = weights['centers']
+            gamma = weights['gamma']
+            balance_factor = weights['balance_factor']
+            
+            # Calculate distances to all centers
+            distances = np.zeros((n_samples, len(centers)))
+            for i, center in enumerate(centers):
+                distances[:, i] = np.sum((X_np - center) ** 2, axis=1)
+            
+            # Apply RBF kernel
+            rbf_activations = np.exp(-gamma * distances)
+            
+            # Apply balancing factor to encourage equal cluster sizes
+            cluster_assignments = np.argmax(rbf_activations, axis=1)
+            cluster_counts = np.bincount(cluster_assignments, minlength=len(centers))
+            
+            # Adjust activations based on current cluster sizes
+            for i in range(len(centers)):
+                if cluster_counts[i] > 0:
+                    # Reduce activation for over-represented clusters
+                    size_factor = len(centers) / (cluster_counts[i] * len(centers) / n_samples + 1)
+                    rbf_activations[:, i] *= size_factor ** balance_factor
+            
+            # Re-calculate assignments after balancing
+            cluster_assignments = np.argmax(rbf_activations, axis=1)
+            
+            # Create output based on cluster assignment
+            y = np.zeros((n_samples, weights['weights'].shape[1]))
+            for i in range(len(centers)):
+                mask = cluster_assignments == i
+                if np.any(mask):
+                    y[mask] = i
+            
+            # Add some continuous variation within clusters
+            y += np.random.randn(n_samples, y.shape[1]) * 0.1
+            
+            # Normalize if specified
+            if weights.get('normalize', False):
+                y_mean = np.mean(y, axis=0, keepdims=True)
+                y_std = np.std(y, axis=0, keepdims=True) + 1e-8
+                y = (y - y_mean) / y_std
                         
         else:
             # Linear combination (matrix multiplication is faster)
