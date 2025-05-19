@@ -82,9 +82,13 @@ class GMMClustersSCM(nn.Module):
         
         # Create covariance matrices (spherical with slight elongation)
         self.covariances = []
+        
+        # Adjust covariance based on separation strength - less separation = more variance
+        base_variance = 0.5 * (10.0 / max(self.separation_strength, 1.0))
+        
         for i in range(self.num_classes):
             # Start with identity
-            cov = np.eye(self.num_features) * 0.5
+            cov = np.eye(self.num_features) * base_variance
             
             # Add some random structure
             if self.num_features > 1:
