@@ -26,8 +26,9 @@ class RealExplicitClustersSCM(nn.Module):
                  **kwargs):
         super(RealExplicitClustersSCM, self).__init__()
         
-        self.seq_len = seq_len
-        self.num_features = num_features
+        self.seq_len = kwargs.get('seq_len', seq_len)
+        # Use max_features if provided (for fixed feature size), otherwise num_features
+        self.num_features = kwargs.get('max_features', kwargs.get('num_features', num_features))
         self.num_outputs = num_outputs
         self.hyperparams = hyperparams or {}
         self.num_classes = kwargs.get('num_classes', num_classes)

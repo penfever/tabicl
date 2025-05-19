@@ -29,15 +29,16 @@ class GMMClustersSCM(nn.Module):
                  **kwargs):
         super(GMMClustersSCM, self).__init__()
         
-        self.seq_len = seq_len
-        self.num_features = num_features
+        self.seq_len = kwargs.get('seq_len', seq_len)
+        # Use max_features if provided (for fixed feature size), otherwise num_features
+        self.num_features = kwargs.get('max_features', kwargs.get('num_features', num_features))
         self.num_outputs = num_outputs
         self.hyperparams = hyperparams or {}
         self.num_classes = kwargs.get('num_classes', num_classes)
         self.separation_strength = kwargs.get('separation_strength', separation_strength)
         self.balance_strength = kwargs.get('balance_strength', balance_strength)
         self.use_pca = use_pca
-        self.pca_components = min(pca_components, num_features)
+        self.pca_components = min(pca_components, self.num_features)
         self.random_state = random_state
         self.device = device
         
@@ -191,6 +192,7 @@ class GMMClustersSCM(nn.Module):
     def _add_complexity(self, X, y):
         """Add complexity to the features while preserving cluster structure."""
         n_samples, n_features = X.shape
+        target_features = self.num_features
         
         # Add polynomial interactions
         if n_features >= 2:
