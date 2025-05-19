@@ -81,12 +81,15 @@ def test_combination(transform_type, assigner_type, n_samples=1000, n_features=1
     
     # Initialize the SCM
     scm = DeterministicTreeSCM(
+        seq_len=n_samples,
+        num_features=n_features,
+        num_outputs=1,
         hyperparams=hyperparams,
         transform_type=transform_type,
         num_causes=n_features // 2,
         max_depth=6,
-        out_dim=1,
-        tree_model="sklearn"
+        tree_model="random_forest",
+        device="cpu"
     )
     
     # Generate data

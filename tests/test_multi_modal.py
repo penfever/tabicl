@@ -96,12 +96,15 @@ def test_transform_clustering(transform_type, n_samples=2000, n_features=10, num
     
     # Initialize the SCM
     scm = DeterministicTreeSCM(
+        seq_len=n_samples,
+        num_features=n_features,
+        num_outputs=1,
         hyperparams=hyperparams,
         transform_type=transform_type,
         num_causes=n_features // 2,
         max_depth=6,
-        out_dim=1,
-        tree_model="sklearn"
+        tree_model="random_forest",  # Changed from "sklearn" to "random_forest"
+        device="cpu"
     )
     
     # Generate data
@@ -167,10 +170,14 @@ def main():
             # Create 2D visualization using first two features
             X_sample = torch.randn(500, n_features)
             scm = DeterministicTreeSCM(
+                seq_len=500,
+                num_features=n_features,
+                num_outputs=1,
                 hyperparams={'num_features': n_features, 'num_classes': num_classes},
                 transform_type=transform_type,
                 num_causes=n_features // 2,
-                out_dim=1
+                tree_model="random_forest",
+                device="cpu"
             )
             
             info = {}
