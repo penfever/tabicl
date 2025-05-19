@@ -21,7 +21,7 @@ def generate_dataset(n_datasets=3, out_dir=None, class_separability=1.0,
         "generate_data.py",
         "--n_datasets", str(n_datasets),
         "--prior", "deterministic_tree_scm",
-        "--num_gpus", "0",  # Use CPU for testing
+        "--num_gpus", "1",  # Use CPU for testing
         "--min_features", str(min_features),
         "--max_features", str(max_features),
         "--min_seq", str(min_seq),
@@ -31,7 +31,7 @@ def generate_dataset(n_datasets=3, out_dir=None, class_separability=1.0,
         "--class_separability", str(class_separability),
         "--max_imbalance_ratio", "2.0",
         "--out_dir", out_dir,
-        "--inner_bsz", "16",  # Smaller batch size for speed
+        "--inner_bsz", "32",  # Smaller batch size for speed
         "--no_causal",
         "--num_layers", "1",
         "--min_swap_prob", "0.0",
@@ -120,10 +120,10 @@ def test_class_separability():
             temp_dir = generate_dataset(
                 n_datasets=1,
                 class_separability=sep_value,
-                min_features=20,    # Reasonable number of features
-                max_features=20,    # Fixed features for consistency
-                min_seq=1000,       # Fewer samples for faster generation
-                max_seq=1000        # Fixed samples for consistency
+                min_features=10,    # Reasonable number of features
+                max_features=25,    # Fixed features for consistency
+                min_seq=2000,       # Fewer samples for faster generation
+                max_seq=2200        # Fixed samples for consistency
             )
             temp_dirs.append(temp_dir)
             
