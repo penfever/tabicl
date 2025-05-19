@@ -27,7 +27,8 @@ class DeterministicTreeLayer(nn.Module):
                  device: str = "cpu",
                  noise_type: str = "swap",
                  n_jobs: int = 4,  # Control parallelism explicitly
-                 class_separability: float = 1.0):
+                 class_separability: float = 1.0,
+                 hyperparams: dict = None):
         super(DeterministicTreeLayer, self).__init__()
         self.out_dim = out_dim
         self.swap_prob = swap_prob
@@ -36,6 +37,7 @@ class DeterministicTreeLayer(nn.Module):
         self.noise_type = noise_type
         self.n_jobs = n_jobs  # Control parallelism to avoid excessive overhead
         self.class_separability = class_separability
+        self.hyperparams = hyperparams or {}
         
         # Cache for deterministic transformations
         self._transform_cache = {}
@@ -646,6 +648,7 @@ class DeterministicTreeSCM(nn.Module):
             noise_type=self.noise_type,
             n_jobs=self.n_jobs,  # Pass explicit parallelism control
             class_separability=self.class_separability,
+            hyperparams=self.hyperparams,
         )
         
         if self.pre_sample_noise_std:
