@@ -92,6 +92,10 @@ def generate_single_gpu(args):
         hp_overrides['class_separability'] = args.class_separability
     if args.assigner_type is not None:
         hp_overrides['assigner_type'] = args.assigner_type
+    if args.n_estimators is not None:
+        hp_overrides['n_estimators'] = args.n_estimators
+    if args.max_depth is not None:
+        hp_overrides['max_depth'] = args.max_depth
     
     # GMM clusters specific parameters
     if args.separation_strength is not None:
@@ -229,6 +233,10 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
         hp_overrides['class_separability'] = args.class_separability
     if args.assigner_type is not None:
         hp_overrides['assigner_type'] = args.assigner_type
+    if args.n_estimators is not None:
+        hp_overrides['n_estimators'] = args.n_estimators
+    if args.max_depth is not None:
+        hp_overrides['max_depth'] = args.max_depth
     
     # GMM clusters specific parameters
     if args.separation_strength is not None:
@@ -461,6 +469,10 @@ def get_args():
     ap.add_argument("--noise_type", type=str, default="swap",
                     choices=["swap", "corrupt", "boundary_blur", "mixed"],
                     help="type of noise injection for deterministic tree SCM")
+    ap.add_argument("--n_estimators", type=int, default=100,
+                    help="number of trees in ensemble for tree-based models (default=100)")
+    ap.add_argument("--max_depth", type=int, default=5,
+                    help="maximum depth of trees for tree-based models (default=5)")
     
     # Class separability parameter
     ap.add_argument("--class_separability", type=float, default=1.0,

@@ -410,15 +410,37 @@ class DeterministicTreeLayer(nn.Module):
         weights = self._get_transform_weights(n_features)
         
         if self.transform_type == "polynomial":
-            # Vectorized polynomial transformation
+            # Optimized polynomial transformation
             y = np.zeros((n_samples, self.out_dim))
-            for j in range(self.out_dim):
-                feat_indices = weights['feat_indices'][j]
-                # Squared terms (vectorized)
-                y[:, j] = np.sum(X_np[:, feat_indices] ** 2, axis=1)
-                # Add cross terms (if applicable)
-                if len(feat_indices) > 1:
-                    y[:, j] += X_np[:, feat_indices[0]] * X_np[:, feat_indices[1]]
+            feat_indices_list = weights['feat_indices']
+            
+            # Batch process all features for better performance
+            all_feature_indices = []
+            for indices in feat_indices_list:
+                all_feature_indices.extend(indices)
+            
+            if all_feature_indices:
+                # Get unique indices and pre-compute squares
+                unique_indices = sorted(set(all_feature_indices))
+                X_selected = X_np[:, unique_indices]
+                X_squared = X_selected ** 2
+                
+                # Create mapping for fast lookup
+                index_map = {idx: i for i, idx in enumerate(unique_indices)}
+                
+                # Process each output dimension using pre-computed values
+                for j in range(self.out_dim):
+                    feat_indices = feat_indices_list[j]
+                    if feat_indices:
+                        # Map to pre-computed indices
+                        mapped_indices = [index_map[idx] for idx in feat_indices]
+                        
+                        # Sum squared terms
+                        y[:, j] = np.sum(X_squared[:, mapped_indices], axis=1)
+                        
+                        # Add cross terms if applicable
+                        if len(feat_indices) > 1:
+                            y[:, j] += X_np[:, feat_indices[0]] * X_np[:, feat_indices[1]]
             
             # Normalize to prevent extreme values
             y_mean = np.mean(y, axis=0, keepdims=True)

@@ -1,0 +1,45 @@
+--- a/src/tabicl/prior/deterministic_tree_scm.py
++++ b/src/tabicl/prior/deterministic_tree_scm.py
+@@ -412,16 +412,32 @@
+         if self.transform_type == "polynomial":
+             # Vectorized polynomial transformation
+             y = np.zeros((n_samples, self.out_dim))
+-            for j in range(self.out_dim):
+-                feat_indices = weights['feat_indices'][j]
+-                # Squared terms (vectorized)
+-                y[:, j] = np.sum(X_np[:, feat_indices] ** 2, axis=1)
+-                # Add cross terms (if applicable)
+-                if len(feat_indices) > 1:
+-                    y[:, j] += X_np[:, feat_indices[0]] * X_np[:, feat_indices[1]]
++            
++            # Batch process all output dimensions at once for better performance
++            feat_indices_list = weights['feat_indices']
++            
++            # Pre-compute all squared features
++            max_features = max(len(indices) for indices in feat_indices_list)
++            if max_features > 0:
++                # Collect all unique feature indices
++                all_indices = set()
++                for indices in feat_indices_list:
++                    all_indices.update(indices)
++                
++                # Pre-compute squares for all used features
++                unique_indices = sorted(all_indices)
++                X_squared = X_np[:, unique_indices] ** 2
++                index_map = {idx: i for i, idx in enumerate(unique_indices)}
++                
++                # Now compute outputs using pre-computed squares
++                for j in range(self.out_dim):
++                    feat_indices = feat_indices_list[j]
++                    if len(feat_indices) > 0:
++                        mapped_indices = [index_map[idx] for idx in feat_indices]
++                        y[:, j] = np.sum(X_squared[:, mapped_indices], axis=1)
++                        
++                        # Add cross terms
++                        if len(feat_indices) > 1:
++                            y[:, j] += X_np[:, feat_indices[0]] * X_np[:, feat_indices[1]]
+             
+             # Normalize to prevent extreme values
+             y_mean = np.mean(y, axis=0, keepdims=True)
+             y_std = np.std(y, axis=0, keepdims=True) + 1e-8
+             y = (y - y_mean) / y_std
