@@ -581,6 +581,7 @@ class DeterministicTreeSCM(nn.Module):
         self.class_separability = class_separability
         self.device = device
         self.n_jobs = n_jobs
+        self.hyperparams = hyperparams or {}
         
         # Cache for reusable components
         self._output_cache = None
