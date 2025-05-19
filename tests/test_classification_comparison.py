@@ -65,9 +65,9 @@ def analyze_sklearn_make_classification():
     return X, y, accuracy
 
 
-def analyze_deterministic_tree_scm():
+def analyze_deterministic_tree_scm(transform_type="polynomial", separability=4.0):
     """Analyze datasets from deterministic_tree_scm"""
-    print("\n=== Analyzing deterministic_tree_scm ===")
+    print(f"\n=== Analyzing deterministic_tree_scm ({transform_type}) ===")
     
     # Generate a dataset
     temp_dir = tempfile.mkdtemp(prefix="analysis_")
@@ -84,22 +84,27 @@ def analyze_deterministic_tree_scm():
         "--max_seq", "3000",
         "--min_classes", "10",
         "--max_classes", "10",
-        "--class_separability", "16.0",
+        "--class_separability", str(separability),
         "--max_imbalance_ratio", "1.0",
         "--out_dir", temp_dir,
         "--inner_bsz", "32",
-        "--no_causal",
+        "--no_causal",  # Add this to match the original test
         "--num_layers", "1",
         "--min_swap_prob", "0.0",
         "--max_swap_prob", "0.0",
-        "--transform_type", "polynomial",
+        "--transform_type", transform_type,
         "--noise_type", "swap",
         "--noise_std", "0.001"
     ]
     
     # Run from tabicl directory
     tabicl_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    subprocess.run(cmd, cwd=tabicl_dir, check=True, capture_output=True)
+    result = subprocess.run(cmd, cwd=tabicl_dir, capture_output=True, text=True)
+    
+    if result.returncode != 0:
+        print(f"Command failed with error:")
+        print(result.stderr)
+        raise subprocess.CalledProcessError(result.returncode, cmd)
     
     # Load the generated dataset
     files = os.listdir(temp_dir)
@@ -130,10 +135,10 @@ def analyze_deterministic_tree_scm():
     plt.figure(figsize=(10, 8))
     scatter = plt.scatter(X_pca[:, 0], X_pca[:, 1], c=y, cmap='viridis', alpha=0.7)
     plt.colorbar(scatter)
-    plt.title('deterministic_tree_scm - PCA visualization')
+    plt.title(f'deterministic_tree_scm ({transform_type}) - PCA visualization')
     plt.xlabel('First principal component')
     plt.ylabel('Second principal component')
-    plt.savefig('deterministic_tree_scm_pca.png', dpi=150, bbox_inches='tight')
+    plt.savefig(f'deterministic_tree_scm_{transform_type}_pca.png', dpi=150, bbox_inches='tight')
     plt.close()
     
     # Clean up
@@ -237,16 +242,24 @@ def main():
     print("Comparative Analysis: make_classification vs deterministic_tree_scm")
     print("=" * 60)
     
-    # Analyze both methods
+    # Analyze make_classification
     X_sklearn, y_sklearn, acc_sklearn = analyze_sklearn_make_classification()
-    X_tree_scm, y_tree_scm, acc_tree_scm = analyze_deterministic_tree_scm()
+    
+    # Analyze deterministic_tree_scm with polynomial transformation
+    X_tree_scm_poly, y_tree_scm_poly, acc_tree_scm_poly = analyze_deterministic_tree_scm(
+        transform_type="polynomial", separability=4.0)
+    
+    # Analyze deterministic_tree_scm with RBF transformation
+    X_tree_scm_rbf, y_tree_scm_rbf, acc_tree_scm_rbf = analyze_deterministic_tree_scm(
+        transform_type="rbf", separability=4.0)
     
     # Compare distributions
-    compare_feature_distributions(X_sklearn, y_sklearn, X_tree_scm, y_tree_scm)
+    compare_feature_distributions(X_sklearn, y_sklearn, X_tree_scm_poly, y_tree_scm_poly)
     
     # Analyze class overlap
     overlap_sklearn = analyze_class_overlap(X_sklearn, y_sklearn, "make_classification")
-    overlap_tree_scm = analyze_class_overlap(X_tree_scm, y_tree_scm, "deterministic_tree_scm")
+    overlap_tree_scm_poly = analyze_class_overlap(X_tree_scm_poly, y_tree_scm_poly, "deterministic_tree_scm (polynomial)")
+    overlap_tree_scm_rbf = analyze_class_overlap(X_tree_scm_rbf, y_tree_scm_rbf, "deterministic_tree_scm (rbf)")
     
     # Summary
     print("\n" + "=" * 60)
@@ -255,9 +268,12 @@ def main():
     print(f"make_classification:")
     print(f"  Accuracy: {acc_sklearn:.4f}")
     print(f"  Class separation: {overlap_sklearn:.4f}")
-    print(f"\ndeterministic_tree_scm:")
-    print(f"  Accuracy: {acc_tree_scm:.4f}")
-    print(f"  Class separation: {overlap_tree_scm:.4f}")
+    print(f"\ndeterministic_tree_scm (polynomial):")
+    print(f"  Accuracy: {acc_tree_scm_poly:.4f}")
+    print(f"  Class separation: {overlap_tree_scm_poly:.4f}")
+    print(f"\ndeterministic_tree_scm (rbf):")
+    print(f"  Accuracy: {acc_tree_scm_rbf:.4f}")
+    print(f"  Class separation: {overlap_tree_scm_rbf:.4f}")
     
     print("\nKey Insights:")
     print("1. Feature-target correlations")
@@ -265,7 +281,8 @@ def main():
     print("3. Feature distributions")
     print("\nVisualization files saved:")
     print("- make_classification_pca.png")
-    print("- deterministic_tree_scm_pca.png")
+    print("- deterministic_tree_scm_polynomial_pca.png")
+    print("- deterministic_tree_scm_rbf_pca.png")
     print("- feature_distributions.png")
     print("- correlation_distributions.png")
 

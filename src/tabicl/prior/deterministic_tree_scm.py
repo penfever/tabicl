@@ -26,7 +26,8 @@ class DeterministicTreeLayer(nn.Module):
                  transform_type: str = "polynomial",
                  device: str = "cpu",
                  noise_type: str = "swap",
-                 n_jobs: int = 4):  # Control parallelism explicitly
+                 n_jobs: int = 4,  # Control parallelism explicitly
+                 class_separability: float = 1.0):
         super(DeterministicTreeLayer, self).__init__()
         self.out_dim = out_dim
         self.swap_prob = swap_prob
@@ -34,6 +35,7 @@ class DeterministicTreeLayer(nn.Module):
         self.device = device
         self.noise_type = noise_type
         self.n_jobs = n_jobs  # Control parallelism to avoid excessive overhead
+        self.class_separability = class_separability
         
         # Cache for deterministic transformations
         self._transform_cache = {}
@@ -129,6 +131,12 @@ class DeterministicTreeLayer(nn.Module):
                     for _ in range(self.out_dim)
                 ]
             }
+        elif self.transform_type == "rbf":
+            self._transform_weights_factory = lambda n_features: {
+                'centers': np.random.randn(self.out_dim * 10, n_features) * 2.0,  # Multiple centers per output
+                'gamma': 0.5 / (self.class_separability if hasattr(self, 'class_separability') else 1.0),
+                'weights': np.random.randn(self.out_dim * 10, self.out_dim)  # Weights for combining RBF outputs
+            }
         elif self.transform_type == "trigonometric":
             self._transform_weights_factory = lambda n_features: {
                 'feat_indices': [
@@ -181,6 +189,24 @@ class DeterministicTreeLayer(nn.Module):
                 # Add cross terms (if applicable)
                 if len(feat_indices) > 1:
                     y[:, j] += X_np[:, feat_indices[0]] * X_np[:, feat_indices[1]]
+                    
+        elif self.transform_type == "rbf":
+            # Radial Basis Function transformation
+            centers = weights['centers']
+            gamma = weights['gamma']
+            rbf_weights = weights['weights']
+            
+            # Compute RBF activations: exp(-gamma * ||x - center||^2)
+            # Using broadcasting for efficiency
+            X_expanded = X_np[:, np.newaxis, :]  # (n_samples, 1, n_features)
+            centers_expanded = centers[np.newaxis, :, :]  # (1, n_centers, n_features)
+            distances_squared = np.sum((X_expanded - centers_expanded) ** 2, axis=2)  # (n_samples, n_centers)
+            
+            # Apply RBF kernel
+            rbf_activations = np.exp(-gamma * distances_squared)  # (n_samples, n_centers)
+            
+            # Combine RBF activations with weights to produce outputs
+            y = rbf_activations @ rbf_weights  # (n_samples, out_dim)
                     
         elif self.transform_type == "trigonometric":
             # Vectorized trigonometric transformation
@@ -515,6 +541,7 @@ class DeterministicTreeSCM(nn.Module):
             device=self.device,
             noise_type=self.noise_type,
             n_jobs=self.n_jobs,  # Pass explicit parallelism control
+            class_separability=self.class_separability,
         )
         
         if self.pre_sample_noise_std:
