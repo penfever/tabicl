@@ -97,7 +97,7 @@ def test_configuration(transform_type, assigner_type, n_samples=2000, n_features
         elif assigner_type == "boolean_logic":
             assigner = BooleanLogicAssigner(num_classes, max_terms=3)
             # For boolean logic, use features directly
-            y_classes = assigner(X).numpy()
+            y_classes = assigner(X).numpy().astype(int)
         else:
             raise ValueError(f"Unknown assigner type: {assigner_type}")
         
@@ -106,11 +106,17 @@ def test_configuration(transform_type, assigner_type, n_samples=2000, n_features
             if y_tensor.ndim == 1:
                 y_tensor = y_tensor.unsqueeze(-1)
             y_classes = assigner(y_tensor).numpy()
+            # Ensure y_classes is 1D and integer
             if y_classes.ndim > 1:
                 y_classes = y_classes.squeeze()
+            y_classes = y_classes.astype(int)
         
         assignment_time = time.time() - start_time
         
+        # Final shape check
+        if y_classes.ndim > 1:
+            y_classes = y_classes.squeeze()
+            
         # Calculate metrics
         class_distribution = np.bincount(y_classes.astype(int))
         imbalance_ratio = calculate_imbalance_ratio(class_distribution)

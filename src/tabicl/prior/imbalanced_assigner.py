@@ -41,13 +41,17 @@ class ImbalancedMulticlassAssigner(nn.Module):
         Parameters
         ----------
         input : Tensor
-            Input of shape (T,).
+            Input of shape (T,) or (T, 1).
             
         Returns
         -------
         Tensor
             Class labels of shape (T,) with integer values [0, num_classes-1].
         """
+        # Ensure 1D input
+        if input.dim() > 1:
+            input = input.squeeze(-1)
+            
         T = input.shape[0]
         device = input.device
         
@@ -126,13 +130,17 @@ class PiecewiseConstantAssigner(nn.Module):
         Parameters
         ----------
         input : Tensor
-            Input of shape (T,).
+            Input of shape (T,) or (T, 1).
             
         Returns
         -------
         Tensor
             Class labels of shape (T,) with integer values [0, num_classes-1].
         """
+        # Ensure 1D input
+        if input.dim() > 1:
+            input = input.squeeze(-1)
+            
         T = input.shape[0]
         device = input.device
         
@@ -164,13 +172,17 @@ class RandomRegionAssigner(nn.Module):
         Parameters
         ----------
         input : Tensor
-            Input of shape (T,).
+            Input of shape (T,) or (T, 1).
             
         Returns
         -------
         Tensor
             Class labels of shape (T,) with integer values [0, num_classes-1].
         """
+        # Ensure 1D input
+        if input.dim() > 1:
+            input = input.squeeze(-1)
+            
         device = input.device
         
         # Create more regions than classes for variety
