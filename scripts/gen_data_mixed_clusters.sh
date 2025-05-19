@@ -147,12 +147,12 @@ def blend_datasets(source_dirs, output_dir, datasets_per_source):
             print(f"Warning: {source_dir} does not exist, skipping...")
             continue
             
-        # Find all .h5 files
-        h5_files = list(source_path.glob("*.h5"))
-        random.shuffle(h5_files)
+        # Find all .csv files
+        csv_files = list(source_path.glob("*.csv"))
+        random.shuffle(csv_files)
         
         # Take the requested number of files
-        selected_files = h5_files[:num_datasets]
+        selected_files = csv_files[:num_datasets]
         
         print(f"Selected {len(selected_files)} files from {source_dir}")
         all_files.extend(selected_files)
@@ -161,9 +161,15 @@ def blend_datasets(source_dirs, output_dir, datasets_per_source):
     random.shuffle(all_files)
     
     for idx, source_file in enumerate(all_files):
-        new_name = f"dataset_{idx:04d}.h5"
+        new_name = f"dataset_{idx:04d}.csv"
         dest_file = output_path / new_name
         shutil.copy2(source_file, dest_file)
+        
+        # Also copy H5 file if it exists
+        h5_file = source_file.with_suffix('.h5')
+        if h5_file.exists():
+            dest_h5 = dest_file.with_suffix('.h5')
+            shutil.copy2(h5_file, dest_h5)
         
         # Also copy metadata file if it exists
         meta_file = source_file.with_suffix('.meta.json')
