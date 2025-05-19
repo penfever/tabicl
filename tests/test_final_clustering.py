@@ -19,6 +19,7 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from tabicl.prior.deterministic_tree_scm import DeterministicTreeSCM
 from tabicl.prior.explicit_clusters_scm import ExplicitClustersSCM
 from tabicl.prior.fixed_explicit_clusters_scm import FixedExplicitClustersSCM
+from tabicl.prior.real_explicit_clusters_scm import RealExplicitClustersSCM
 from tabicl.prior.direct_clusters_scm import DirectClustersSCM
 from tabicl.prior.gmm_clusters_scm import GMMClustersSCM
 from tabicl.prior.imbalanced_assigner import ImbalancedMulticlassAssigner
@@ -201,7 +202,15 @@ def main():
         use_rank_assigner=True
     ))
     
-    # 4. DeterministicTreeSCM with RBF
+    # 4. Real Explicit Clusters (returns actual labels)
+    results.append(test_method(
+        'explicit_clusters_real',
+        RealExplicitClustersSCM,
+        {'cluster_separation': 3.0, 'within_cluster_std': 0.3},
+        use_rank_assigner=False  # Don't use assigner since it returns real labels
+    ))
+    
+    # 5. DeterministicTreeSCM with RBF
     results.append(test_method(
         'tree_rbf',
         DeterministicTreeSCM,
@@ -213,7 +222,7 @@ def main():
         use_rank_assigner=True
     ))
     
-    # 5. DeterministicTreeSCM with multi_modal
+    # 6. DeterministicTreeSCM with multi_modal
     results.append(test_method(
         'tree_multi_modal',
         DeterministicTreeSCM,
@@ -225,7 +234,7 @@ def main():
         use_rank_assigner=True
     ))
     
-    # 6. DeterministicTreeSCM with balanced_clusters
+    # 7. DeterministicTreeSCM with balanced_clusters
     results.append(test_method(
         'tree_balanced_clusters',
         DeterministicTreeSCM,
@@ -237,24 +246,24 @@ def main():
         use_rank_assigner=True
     ))
     
-    # 7. GMM Clusters (harder version)
+    # 8. GMM Clusters (target ~90% accuracy)
     results.append(test_method(
-        'gmm_clusters_hard',
+        'gmm_clusters_90',
         GMMClustersSCM,
         {
-            'separation_strength': 3.0,  # Significantly reduced from default 10.0 to make harder
-            'balance_strength': 0.7  # Reduced from default 0.9 to allow more imbalance
+            'separation_strength': 8.25,  # 75% of the way back from 3.0 to 10.0
+            'balance_strength': 0.85  # 75% of the way back from 0.7 to 0.9
         },
         use_rank_assigner=False
     ))
     
-    # 8. GMM Clusters (even harder version)
+    # 9. GMM Clusters (target ~85% accuracy)
     results.append(test_method(
-        'gmm_clusters_harder',
+        'gmm_clusters_85',
         GMMClustersSCM,
         {
-            'separation_strength': 2.0,  # Very low separation for ~85% accuracy target
-            'balance_strength': 0.6  # More imbalance allowed
+            'separation_strength': 7.0,  # Reduced more for ~85% accuracy
+            'balance_strength': 0.8  # Slightly less balance
         },
         use_rank_assigner=False
     ))
