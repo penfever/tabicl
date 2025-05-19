@@ -16,12 +16,13 @@ import pandas as pd
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.tabicl.prior.imbalanced_assigner import (
+# Import directly without src prefix since we're in the tabicl directory
+from tabicl.prior.imbalanced_assigner import (
     ImbalancedMulticlassAssigner, PiecewiseConstantAssigner,
     RandomRegionAssigner, StepFunctionAssigner, BooleanLogicAssigner
 )
-from src.tabicl.prior.deterministic_tree_scm import DeterministicTreeSCM
-from src.tabicl.prior.explicit_clusters_scm import ExplicitClustersSCM
+from tabicl.prior.deterministic_tree_scm import DeterministicTreeSCM
+from tabicl.prior.explicit_clusters_scm import ExplicitClustersSCM
 
 
 def calculate_imbalance_ratio(class_distribution):

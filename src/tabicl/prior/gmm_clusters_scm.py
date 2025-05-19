@@ -53,10 +53,19 @@ class GMMClustersSCM(nn.Module):
         # Create means on a hypersphere for optimal separation
         self.means = np.zeros((self.num_classes, self.num_features))
         
-        # Use Latin Hypercube Sampling for better space coverage
-        from scipy.stats import qmc
-        sampler = qmc.LatinHypercube(d=min(self.num_features, 3))
-        samples = sampler.random(n=self.num_classes)
+        # Create well-spaced samples in [0, 1]^d
+        d = min(self.num_features, 3)
+        samples = np.zeros((self.num_classes, d))
+        
+        # Simple grid-based spacing
+        if self.num_classes <= 8:
+            # For small number of classes, use corners of hypercube
+            for i in range(self.num_classes):
+                binary = format(i, f'0{d}b')[-d:]
+                samples[i] = [int(b) for b in binary]
+        else:
+            # For larger number, use random spacing
+            samples = np.random.rand(self.num_classes, d)
         
         # Scale and center the samples
         samples = (samples - 0.5) * 2 * self.separation_strength

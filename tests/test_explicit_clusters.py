@@ -15,8 +15,8 @@ import os
 # Add parent directory to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from src.tabicl.prior.explicit_clusters_scm import ExplicitClustersSCM
-from src.tabicl.prior.imbalanced_assigner import ImbalancedMulticlassAssigner
+from tabicl.prior.explicit_clusters_scm import ExplicitClustersSCM
+from tabicl.prior.imbalanced_assigner import ImbalancedMulticlassAssigner
 
 
 def visualize_explicit_clusters(X, y_true, title="Explicit Clusters"):
