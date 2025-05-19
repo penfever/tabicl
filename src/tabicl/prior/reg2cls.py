@@ -8,7 +8,9 @@ import torch
 from torch import nn, Tensor
 import torch.nn.functional as F
 
-from .imbalanced_assigner import ImbalancedMulticlassAssigner
+from .imbalanced_assigner import (ImbalancedMulticlassAssigner, PiecewiseConstantAssigner,
+                                RandomRegionAssigner, StepFunctionAssigner, 
+                                BooleanLogicAssigner)
 
 
 def torch_nanstd(input, dim=None, keepdim=False, ddof=0, *, dtype=None) -> Tensor:
@@ -246,7 +248,14 @@ class Reg2Cls(nn.Module):
         target transformation. Expected keys include:
         - num_classes (int): Number of classes for classification conversion.
         - max_features (int): Maximum number of features allowed (defines output feature dim).
-        - multiclass_type (str): Strategy for multiclass conversion ('rank' or 'value').
+        - assigner_type (str): Strategy for class assignment. Options:
+            * 'rank': Original rank-based assignment (default for backward compatibility)
+            * 'value': Original value-based assignment
+            * 'piecewise': Piecewise constant regions with random class mapping
+            * 'random_region': Random regions mapped to classes
+            * 'step_function': Step function boundaries
+            * 'boolean_logic': Boolean logic formulas for class assignment
+        - multiclass_type (str): Legacy alias for assigner_type ('rank' or 'value').
         - balanced (bool): Whether to enforce balanced classes (currently only for binary).
         - multiclass_ordered_prob (float): Prob. of keeping natural class order.
         - cat_prob (float, optional): Probability of converting features to categorical.
@@ -254,6 +263,9 @@ class Reg2Cls(nn.Module):
         - scale_by_max_features (bool): Whether to scale features by proportion used.
         - permute_features (bool, optional): Whether to randomly permute features. Defaults to True.
         - permute_labels (bool, optional): Whether to randomly permute final class labels. Defaults to True.
+        - imbalance_ratio (float): Ratio for class imbalance (only for rank/value types).
+        - max_steps (int): Maximum steps for piecewise assigner.
+        - max_terms (int): Maximum terms for boolean logic assigner.
 
     Attributes
     ----------
@@ -270,19 +282,50 @@ class Reg2Cls(nn.Module):
         self.hp = hp
 
         num_classes = self.hp["num_classes"]
+        self.class_assigner = self._get_class_assigner(num_classes)
+    
+    def _get_class_assigner(self, num_classes: int):
+        """Get the appropriate class assigner based on configuration.
+        
+        Parameters
+        ----------
+        num_classes : int
+            Number of classes to generate.
+            
+        Returns
+        -------
+        nn.Module or None
+            The class assigner module, or None if num_classes is 0.
+        """
+        if num_classes == 0:
+            return None
+            
+        # Get assigner type from hyperparameters
+        assigner_type = self.hp.get("assigner_type", self.hp.get("multiclass_type", "rank"))
         imbalance_ratio = self.hp.get("imbalance_ratio", 1.0)
         
-        if num_classes == 0:
-            self.class_assigner = None
-        elif num_classes == 2 and self.hp.get("balanced", False):
-            self.class_assigner = BalancedBinarize()
-        elif num_classes >= 2:
-            # Always use the imbalanced assigner for consistency and control
-            self.class_assigner = ImbalancedMulticlassAssigner(
-                num_classes, imbalance_ratio=imbalance_ratio, mode=self.hp["multiclass_type"]
+        # Special case for balanced binary classification
+        if num_classes == 2 and self.hp.get("balanced", False) and assigner_type == "rank":
+            return BalancedBinarize()
+        
+        # New assigners
+        if assigner_type == "piecewise":
+            max_steps = self.hp.get("max_steps", 10)
+            return PiecewiseConstantAssigner(num_classes, max_steps=max_steps)
+        elif assigner_type == "random_region":
+            return RandomRegionAssigner(num_classes)
+        elif assigner_type == "step_function":
+            return StepFunctionAssigner(num_classes)
+        elif assigner_type == "boolean_logic":
+            max_terms = self.hp.get("max_terms", 5)
+            return BooleanLogicAssigner(num_classes, max_terms=max_terms)
+        elif assigner_type in ["rank", "value"]:
+            # Original assigner for backward compatibility
+            return ImbalancedMulticlassAssigner(
+                num_classes, imbalance_ratio=imbalance_ratio, mode=assigner_type
             )
         else:
-            raise ValueError(f"Invalid number of classes: {num_classes}")
+            raise ValueError(f"Unknown assigner type: {assigner_type}")
 
     def forward(self, X: Tensor, y: Tensor) -> tuple[Tensor, Tensor]:
         """Processes a single dataset (X, y) according to the initialized hyperparameters.

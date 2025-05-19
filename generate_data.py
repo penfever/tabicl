@@ -90,6 +90,8 @@ def generate_single_gpu(args):
         hp_overrides['noise_type'] = args.noise_type
     if args.class_separability is not None and args.class_separability != 1.0:
         hp_overrides['class_separability'] = args.class_separability
+    if args.assigner_type is not None:
+        hp_overrides['assigner_type'] = args.assigner_type
     
     # Merge overrides with default fixed_hp
     from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
@@ -211,6 +213,8 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
         hp_overrides['noise_type'] = args.noise_type
     if args.class_separability is not None and args.class_separability != 1.0:
         hp_overrides['class_separability'] = args.class_separability
+    if args.assigner_type is not None:
+        hp_overrides['assigner_type'] = args.assigner_type
     
     # Merge overrides with default fixed_hp
     from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
@@ -423,7 +427,7 @@ def get_args():
     ap.add_argument("--max_swap_prob", type=float, default=0.2,
                     help="maximum probability of swapping target pairs in deterministic tree SCM")
     ap.add_argument("--transform_type", type=str, default="polynomial",
-                    choices=["polynomial", "trigonometric", "exponential", "mixed"],
+                    choices=["polynomial", "trigonometric", "exponential", "mixed", "rbf"],
                     help="type of deterministic transformation for deterministic tree SCM")
     ap.add_argument("--noise_type", type=str, default="swap",
                     choices=["swap", "corrupt", "boundary_blur", "mixed"],
@@ -432,6 +436,11 @@ def get_args():
     # Class separability parameter
     ap.add_argument("--class_separability", type=float, default=1.0,
                     help="multiplier to scale informative features to increase class separation (default: 1.0)")
+    
+    # Assigner type for regression to classification conversion
+    ap.add_argument("--assigner_type", type=str, default="rank",
+                    choices=["rank", "value", "piecewise", "random_region", "step_function", "boolean_logic"],
+                    help="type of class assigner for regression to classification conversion")
     
     # Multi-GPU specific arguments
     ap.add_argument("--num_gpus", type=int, default=-1,
