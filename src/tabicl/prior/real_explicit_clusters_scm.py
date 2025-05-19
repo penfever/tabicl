@@ -20,6 +20,7 @@ class RealExplicitClustersSCM(nn.Module):
                  num_classes: int = 10,
                  cluster_separation: float = 3.0,
                  within_cluster_std: float = 0.3,
+                 label_noise: float = 0.0,
                  random_state: int = 42,
                  device: str = "cpu",
                  **kwargs):
@@ -29,9 +30,10 @@ class RealExplicitClustersSCM(nn.Module):
         self.num_features = num_features
         self.num_outputs = num_outputs
         self.hyperparams = hyperparams or {}
-        self.num_classes = num_classes
-        self.cluster_separation = cluster_separation
-        self.within_cluster_std = within_cluster_std
+        self.num_classes = kwargs.get('num_classes', num_classes)
+        self.cluster_separation = kwargs.get('cluster_separation', cluster_separation)
+        self.within_cluster_std = kwargs.get('within_cluster_std', within_cluster_std)
+        self.label_noise = kwargs.get('label_noise', label_noise)
         self.random_state = random_state
         self.device = device
         
@@ -108,6 +110,16 @@ class RealExplicitClustersSCM(nn.Module):
         # Standardize features to prevent scale issues
         scaler = StandardScaler()
         X = scaler.fit_transform(X)
+        
+        # Add label noise if specified
+        if self.label_noise > 0:
+            n_noisy = int(self.seq_len * self.label_noise)
+            noisy_indices = np.random.choice(self.seq_len, n_noisy, replace=False)
+            for idx in noisy_indices:
+                # Randomly change to a different class
+                current_class = y[idx]
+                other_classes = [c for c in range(self.num_classes) if c != current_class]
+                y[idx] = np.random.choice(other_classes)
         
         # Convert to tensors
         X_tensor = torch.tensor(X, dtype=torch.float32, device=self.device)

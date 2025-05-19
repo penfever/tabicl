@@ -33,9 +33,9 @@ class GMMClustersSCM(nn.Module):
         self.num_features = num_features
         self.num_outputs = num_outputs
         self.hyperparams = hyperparams or {}
-        self.num_classes = num_classes
-        self.separation_strength = separation_strength
-        self.balance_strength = balance_strength
+        self.num_classes = kwargs.get('num_classes', num_classes)
+        self.separation_strength = kwargs.get('separation_strength', separation_strength)
+        self.balance_strength = kwargs.get('balance_strength', balance_strength)
         self.use_pca = use_pca
         self.pca_components = min(pca_components, num_features)
         self.random_state = random_state

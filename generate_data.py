@@ -93,6 +93,20 @@ def generate_single_gpu(args):
     if args.assigner_type is not None:
         hp_overrides['assigner_type'] = args.assigner_type
     
+    # GMM clusters specific parameters
+    if args.separation_strength is not None:
+        hp_overrides['separation_strength'] = args.separation_strength
+    if args.balance_strength is not None:
+        hp_overrides['balance_strength'] = args.balance_strength
+    
+    # Explicit clusters specific parameters
+    if args.cluster_separation is not None:
+        hp_overrides['cluster_separation'] = args.cluster_separation
+    if args.within_cluster_std is not None:
+        hp_overrides['within_cluster_std'] = args.within_cluster_std
+    if args.label_noise is not None:
+        hp_overrides['label_noise'] = args.label_noise
+    
     # Merge overrides with default fixed_hp
     from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
     fixed_hp = DEFAULT_FIXED_HP.copy()
@@ -215,6 +229,20 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
         hp_overrides['class_separability'] = args.class_separability
     if args.assigner_type is not None:
         hp_overrides['assigner_type'] = args.assigner_type
+    
+    # GMM clusters specific parameters
+    if args.separation_strength is not None:
+        hp_overrides['separation_strength'] = args.separation_strength
+    if args.balance_strength is not None:
+        hp_overrides['balance_strength'] = args.balance_strength
+    
+    # Explicit clusters specific parameters
+    if args.cluster_separation is not None:
+        hp_overrides['cluster_separation'] = args.cluster_separation
+    if args.within_cluster_std is not None:
+        hp_overrides['within_cluster_std'] = args.within_cluster_std
+    if args.label_noise is not None:
+        hp_overrides['label_noise'] = args.label_noise
     
     # Merge overrides with default fixed_hp
     from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
@@ -374,7 +402,8 @@ def get_args():
     ap.add_argument("--n_datasets", type=int, required=True,
                     help="number of synthetic episodes to generate")
     ap.add_argument("--prior", default="mix_scm",
-                    choices=["mlp_scm", "tree_scm", "mix_scm", "dummy", "deterministic_tree_scm"],
+                    choices=["mlp_scm", "tree_scm", "mix_scm", "dummy", "deterministic_tree_scm", 
+                             "gmm_clusters_scm", "real_explicit_clusters_scm"],
                     help="'mix_scm' resamples the family episode‑wise, 'deterministic_tree_scm' creates learnable datasets")
     ap.add_argument("--min_features", type=int, default=5)
     ap.add_argument("--max_features", type=int, default=120)
@@ -441,6 +470,20 @@ def get_args():
     ap.add_argument("--assigner_type", type=str, default="rank",
                     choices=["rank", "value", "piecewise", "random_region", "step_function", "boolean_logic"],
                     help="type of class assigner for regression to classification conversion")
+    
+    # GMM clusters parameters
+    ap.add_argument("--separation_strength", type=float, default=10.0,
+                    help="separation strength for GMM clusters (lower = harder, default=10.0)")
+    ap.add_argument("--balance_strength", type=float, default=0.9,
+                    help="balance strength for GMM clusters (lower = more imbalance, default=0.9)")
+    
+    # Explicit clusters parameters
+    ap.add_argument("--cluster_separation", type=float, default=3.0,
+                    help="separation between explicit cluster centers (default=3.0)")
+    ap.add_argument("--within_cluster_std", type=float, default=0.3,
+                    help="standard deviation within each cluster (default=0.3)")
+    ap.add_argument("--label_noise", type=float, default=0.0,
+                    help="fraction of labels to randomly flip for noise (default=0.0)")
     
     # Multi-GPU specific arguments
     ap.add_argument("--num_gpus", type=int, default=-1,
