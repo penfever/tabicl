@@ -30,9 +30,8 @@ def generate_dataset(n_datasets=3, out_dir=None, class_separability=1.0,
         "--max_classes", "10",
         "--class_separability", str(class_separability),
         "--max_imbalance_ratio", "2.0",
-        "--replay_small",
         "--out_dir", out_dir,
-        "--inner_bsz", "32",
+        "--inner_bsz", "16",  # Smaller batch size for speed
         "--no_causal",
         "--num_layers", "1",
         "--min_swap_prob", "0.0",
@@ -83,12 +82,12 @@ def test_random_forest_accuracy(X, y, test_size=0.2, random_state=42):
         X, y, test_size=test_size, random_state=random_state
     )
     
-    # Train Random Forest with better parameters for complex synthetic data
+    # Train Random Forest with faster parameters
     rf = RandomForestClassifier(
-        n_estimators=300,   # More trees
-        max_depth=None,     # No depth limit
-        min_samples_split=2,  # Allow more splits
-        min_samples_leaf=1,   # Allow smaller leaves
+        n_estimators=100,   # Fewer trees for speed
+        max_depth=15,       # Limit depth for speed
+        min_samples_split=5,  # Reduce overfitting and speed up
+        min_samples_leaf=2,   # Reduce overfitting and speed up
         random_state=random_state,
         n_jobs=-1
     )
@@ -121,10 +120,10 @@ def test_class_separability():
             temp_dir = generate_dataset(
                 n_datasets=1,
                 class_separability=sep_value,
-                min_features=10,    # More features for better separation
-                max_features=25,
-                min_seq=2000,       # More samples for better training  
-                max_seq=4000
+                min_features=20,    # Reasonable number of features
+                max_features=20,    # Fixed features for consistency
+                min_seq=1000,       # Fewer samples for faster generation
+                max_seq=1000        # Fixed samples for consistency
             )
             temp_dirs.append(temp_dir)
             
