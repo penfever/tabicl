@@ -21,6 +21,7 @@ from src.tabicl.prior.imbalanced_assigner import (
     RandomRegionAssigner, StepFunctionAssigner, BooleanLogicAssigner
 )
 from src.tabicl.prior.deterministic_tree_scm import DeterministicTreeSCM
+from src.tabicl.prior.explicit_clusters_scm import ExplicitClustersSCM
 
 
 def calculate_imbalance_ratio(class_distribution):
@@ -57,17 +58,30 @@ def test_configuration(transform_type, assigner_type, n_samples=2000, n_features
         }
         
         # Initialize the SCM
-        scm = DeterministicTreeSCM(
-            seq_len=n_samples,
-            num_features=n_features,
-            num_outputs=1,
-            hyperparams=hyperparams,
-            transform_type=transform_type,
-            num_causes=n_features // 2,
-            max_depth=6,
-            tree_model="random_forest",
-            device="cpu"
-        )
+        if transform_type == "explicit_clusters":
+            scm = ExplicitClustersSCM(
+                seq_len=n_samples,
+                num_features=n_features,
+                num_outputs=1,
+                hyperparams=hyperparams,
+                num_classes=num_classes,
+                min_samples_per_class=n_samples // num_classes,
+                cluster_separation=5.0,
+                within_cluster_std=0.5,
+                device="cpu"
+            )
+        else:
+            scm = DeterministicTreeSCM(
+                seq_len=n_samples,
+                num_features=n_features,
+                num_outputs=1,
+                hyperparams=hyperparams,
+                transform_type=transform_type,
+                num_causes=n_features // 2,
+                max_depth=6,
+                tree_model="random_forest",
+                device="cpu"
+            )
         
         # Generate data
         X = torch.randn(n_samples, n_features) * 2.0
@@ -325,7 +339,7 @@ def run_comprehensive_test():
     print("=" * 40)
     
     # Define test configurations
-    transform_types = ['polynomial', 'rbf', 'multi_modal', 'mixture', 'balanced_clusters', 'enhanced_mixture']
+    transform_types = ['polynomial', 'rbf', 'multi_modal', 'mixture', 'balanced_clusters', 'enhanced_mixture', 'explicit_clusters']
     assigner_types = ['rank', 'value', 'piecewise', 'random_region', 'step_function']
     
     # Storage for results
