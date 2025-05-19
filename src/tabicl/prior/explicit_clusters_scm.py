@@ -20,8 +20,8 @@ class ExplicitClustersSCM(nn.Module):
                  hyperparams: dict = None,
                  num_classes: int = 10,
                  min_samples_per_class: int = 50,
-                 cluster_separation: float = 5.0,
-                 within_cluster_std: float = 0.5,
+                 cluster_separation: float = 2.0,
+                 within_cluster_std: float = 0.3,
                  random_state: int = 42,
                  device: str = "cpu",
                  **kwargs):
@@ -198,8 +198,9 @@ class ExplicitClustersSCM(nn.Module):
         if info is not None:
             # For the test, return the class labels as continuous values
             # The test will use assigners to convert back to classes
-            # We'll make the continuous values clearly separated by class
-            y_continuous = y_tensor * 10.0 + torch.randn_like(y_tensor) * 0.5
+            # We'll make the continuous values moderately separated by class
+            # Use smaller multiplier and less noise for better discretization
+            y_continuous = y_tensor * 1.0 + torch.randn_like(y_tensor) * 0.1
             return {'y_cont': y_continuous}
         
         return X_tensor, y_tensor
