@@ -663,14 +663,21 @@ class DeterministicTreeSCM(nn.Module):
         
         return nn.Sequential(tree_layer, noise_layer)
     
-    def forward(self):
+    def forward(self, X=None, info=None):
         """Generates synthetic data with enhanced performance."""
-        # Sample causes or use cached values if available
-        if self._causes_cache is None:
-            causes = self.xsampler.sample()  # (seq_len, num_causes)
-            self._causes_cache = causes
+        # If X is provided, use it directly as the causes
+        if X is not None:
+            causes = X
+            # Update the number of causes based on input
+            if causes.shape[1] != self.num_causes:
+                self.num_causes = causes.shape[1]
         else:
-            causes = self._causes_cache
+            # Sample causes or use cached values if available
+            if self._causes_cache is None:
+                causes = self.xsampler.sample()  # (seq_len, num_causes)
+                self._causes_cache = causes
+            else:
+                causes = self._causes_cache
         
         # Generate outputs through tree layers
         if self._output_cache is None:
@@ -703,6 +710,10 @@ class DeterministicTreeSCM(nn.Module):
         self._causes_cache = None
         self._output_cache = None
             
+        # If info dict is provided, return in expected format for testing
+        if info is not None:
+            return {'y_cont': y.unsqueeze(-1) if y.ndim == 1 else y}
+        
         return X, y
     
     def handle_outputs(self, causes, outputs):
