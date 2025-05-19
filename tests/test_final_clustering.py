@@ -270,7 +270,7 @@ def main():
     
     plt.tight_layout()
     
-    output_dir = Path('/Users/benfeuer/Library/CloudStorage/GoogleDrive-penfever@gmail.com/My Drive/Current Projects/tabular-fm-llm/data/clustering_expts')
+    output_dir = Path('./clustering')
     plt.savefig(output_dir / 'method_comparison.png', dpi=300, bbox_inches='tight')
     plt.close()
     
