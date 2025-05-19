@@ -62,7 +62,14 @@ def visualize_clustering(X, y_continuous, y_classes, transform_type):
     ax = axes[1, 1]
     for class_id in np.unique(y_classes):
         mask = y_classes == class_id
-        ax.hist(y_continuous[mask], bins=30, alpha=0.5, label=f'Class {int(class_id)}')
+        class_values = y_continuous[mask]
+        if len(class_values) > 0 and np.std(class_values) > 0:
+            # Use adaptive binning to avoid errors
+            try:
+                ax.hist(class_values, bins='auto', alpha=0.5, label=f'Class {int(class_id)}')
+            except ValueError:
+                # Fallback to fewer bins if needed
+                ax.hist(class_values, bins=10, alpha=0.5, label=f'Class {int(class_id)}')
     ax.set_title('Continuous Values by Class')
     ax.set_xlabel('Value')
     ax.set_ylabel('Frequency')

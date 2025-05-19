@@ -319,6 +319,11 @@ class DeterministicTreeLayer(nn.Module):
                 # Add cross terms (if applicable)
                 if len(feat_indices) > 1:
                     y[:, j] += X_np[:, feat_indices[0]] * X_np[:, feat_indices[1]]
+            
+            # Normalize to prevent extreme values
+            y_mean = np.mean(y, axis=0, keepdims=True)
+            y_std = np.std(y, axis=0, keepdims=True) + 1e-8
+            y = (y - y_mean) / y_std
                     
         elif self.transform_type == "rbf":
             # Radial Basis Function transformation
@@ -463,6 +468,11 @@ class DeterministicTreeLayer(nn.Module):
                     mask = component_assignments == i
                     if np.any(mask):
                         y[mask] += i * 3.0
+            
+            # Normalize to prevent extreme values
+            y_mean = np.mean(y, axis=0, keepdims=True)
+            y_std = np.std(y, axis=0, keepdims=True) + 1e-8
+            y = (y - y_mean) / y_std
                         
         elif self.transform_type == "balanced_clusters":
             # Balanced cluster generation
