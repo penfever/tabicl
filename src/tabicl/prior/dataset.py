@@ -592,6 +592,12 @@ class SCMPrior(Prior):
         elif params["prior_type"] == "deterministic_tree_scm":
             from .deterministic_tree_scm import DeterministicTreeSCM
             prior_cls = DeterministicTreeSCM
+        elif params["prior_type"] == "gmm_clusters_scm":
+            from .gmm_clusters_scm import GMMClustersSCM
+            prior_cls = GMMClustersSCM
+        elif params["prior_type"] == "real_explicit_clusters_scm":
+            from .real_explicit_clusters_scm import RealExplicitClustersSCM
+            prior_cls = RealExplicitClustersSCM
         else:
             raise ValueError(f"Unknown prior type {params['prior_type']}")
 
@@ -600,7 +606,10 @@ class SCMPrior(Prior):
         
         while True:
             X, y = prior_cls(**params)()
-            X, y = Reg2Cls(params)(X, y)
+            
+            # GMM and explicit clusters don't need Reg2Cls (they already return discrete labels)
+            if params["prior_type"] not in ["gmm_clusters_scm", "real_explicit_clusters_scm"]:
+                X, y = Reg2Cls(params)(X, y)
 
             # Add batch dim for single dataset to be compatible with delete_unique_features and sanity_check
             X, y = X.unsqueeze(0), y.unsqueeze(0)
@@ -1002,13 +1011,15 @@ class PriorDataset(IterableDataset):
         specific distributions to ensure model robustness on smaller datasets
 
     prior_type : str, default="mlp_scm"
-        Type of prior: 'mlp_scm' (default), 'tree_scm', 'mix_scm', 'deterministic_tree_scm', or 'dummy'
+        Type of prior: 'mlp_scm' (default), 'tree_scm', 'mix_scm', 'deterministic_tree_scm', 'gmm_clusters_scm', 'real_explicit_clusters_scm', or 'dummy'
 
         1. SCM-based: Structural causal models with complex feature relationships
          - 'mlp_scm': MLP-based causal models
          - 'tree_scm': Tree-based causal models
          - 'mix_scm': Probabilistic mix of the above models
          - 'deterministic_tree_scm': Tree-based with controlled noise for learnable datasets
+         - 'gmm_clusters_scm': Gaussian Mixture Model-based clusters
+         - 'real_explicit_clusters_scm': Explicit clusters with discrete labels
 
         2. Dummy: Randomly generated datasets for debugging
 
@@ -1078,7 +1089,7 @@ class PriorDataset(IterableDataset):
                 min_imbalance_ratio=min_imbalance_ratio,
                 max_imbalance_ratio=max_imbalance_ratio,
             )
-        elif prior_type in ["mlp_scm", "tree_scm", "mix_scm", "deterministic_tree_scm"]:
+        elif prior_type in ["mlp_scm", "tree_scm", "mix_scm", "deterministic_tree_scm", "gmm_clusters_scm", "real_explicit_clusters_scm"]:
             self.prior = SCMPrior(
                 batch_size=batch_size,
                 batch_size_per_gp=batch_size_per_gp,
@@ -1105,7 +1116,7 @@ class PriorDataset(IterableDataset):
             )
         else:
             raise ValueError(
-                f"Unknown prior type '{prior_type}'. Available options: 'mlp_scm', 'tree_scm', 'mix_scm', 'deterministic_tree_scm', or 'dummy'."
+                f"Unknown prior type '{prior_type}'. Available options: 'mlp_scm', 'tree_scm', 'mix_scm', 'deterministic_tree_scm', 'gmm_clusters_scm', 'real_explicit_clusters_scm', or 'dummy'."
             )
 
         self.batch_size = batch_size
