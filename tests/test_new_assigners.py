@@ -16,7 +16,6 @@ from src.tabicl.prior.imbalanced_assigner import (
     ImbalancedMulticlassAssigner, PiecewiseConstantAssigner,
     RandomRegionAssigner, StepFunctionAssigner, BooleanLogicAssigner
 )
-from src.tabicl.prior.mlp_scm import MLP
 from src.tabicl.prior.utils import XSampler
 
 
