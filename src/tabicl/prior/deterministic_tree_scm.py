@@ -137,6 +137,20 @@ class DeterministicTreeLayer(nn.Module):
                 'gamma': 0.5 / (self.class_separability if hasattr(self, 'class_separability') else 1.0),
                 'weights': np.random.randn(self.out_dim * 10, self.out_dim)  # Weights for combining RBF outputs
             }
+        elif self.transform_type == "multi_modal":
+            # Create explicit cluster centers matching desired number of classes
+            num_clusters = self.hyperparams.get('num_classes', 5)
+            self._transform_weights_factory = lambda n_features: {
+                'centers': np.array([
+                    np.random.randn(n_features) * 2.0 + 
+                    np.array([np.cos(2*np.pi*i/num_clusters), np.sin(2*np.pi*i/num_clusters)] + 
+                            [0]*(n_features-2)) * 3.0
+                    for i in range(num_clusters)
+                ] * max(1, self.out_dim // num_clusters)),  # Repeat centers if needed
+                'gamma': 1.0 / (self.class_separability if hasattr(self, 'class_separability') else 1.0),
+                'weights': np.random.randn(num_clusters * max(1, self.out_dim // num_clusters), self.out_dim),
+                'cluster_probs': np.ones(num_clusters) / num_clusters
+            }
         elif self.transform_type == "trigonometric":
             self._transform_weights_factory = lambda n_features: {
                 'feat_indices': [
@@ -158,6 +172,21 @@ class DeterministicTreeLayer(nn.Module):
                     np.random.choice(n_features, size=min(3, n_features), replace=False)
                     for _ in range(self.out_dim)
                 ]
+            }
+        elif self.transform_type == "mixture":
+            # Mixture of different transformations to create natural clusters
+            num_components = self.hyperparams.get('num_classes', 5)
+            self._transform_weights_factory = lambda n_features: {
+                'component_weights': [
+                    {
+                        'type': np.random.choice(['rbf', 'polynomial', 'trigonometric']),
+                        'center': np.random.randn(n_features) * 3.0,
+                        'scale': np.random.uniform(0.5, 2.0),
+                        'gamma': np.random.uniform(0.1, 1.0)
+                    }
+                    for _ in range(num_components)
+                ],
+                'mixture_weights': np.random.dirichlet(np.ones(num_components))
             }
         else:
             # Default to linear combination
@@ -207,6 +236,32 @@ class DeterministicTreeLayer(nn.Module):
             
             # Combine RBF activations with weights to produce outputs
             y = rbf_activations @ rbf_weights  # (n_samples, out_dim)
+            
+        elif self.transform_type == "multi_modal":
+            # Generate multi-modal outputs for better natural clustering
+            centers = weights['centers']
+            gamma = weights['gamma'] 
+            weights_matrix = weights['weights']
+            
+            # Calculate distances to all centers
+            X_expanded = X_np[:, np.newaxis, :]
+            centers_expanded = centers[np.newaxis, :, :]
+            distances_squared = np.sum((X_expanded - centers_expanded) ** 2, axis=2)
+            
+            # Apply RBF kernel with cluster-specific scaling
+            rbf_activations = np.exp(-gamma * distances_squared)
+            
+            # Weight the activations to create distinct modes
+            y = rbf_activations @ weights_matrix
+            
+            # Add some between-cluster separation
+            if self.hyperparams.get('add_cluster_separation', True):
+                num_clusters = self.hyperparams.get('num_classes', 5)
+                cluster_assignments = np.argmax(rbf_activations[:, :num_clusters], axis=1)
+                for i in range(num_clusters):
+                    mask = cluster_assignments == i
+                    if np.any(mask):
+                        y[mask] += i * 5.0  # Add cluster-specific offset
                     
         elif self.transform_type == "trigonometric":
             # Vectorized trigonometric transformation
@@ -247,6 +302,55 @@ class DeterministicTreeLayer(nn.Module):
                 for j in exp_indices:
                     feat_indices = weights['feat_indices'][j]
                     y[:, j] = np.exp(np.clip(X_np[:, feat_indices[0]], -5, 5))
+                    
+        elif self.transform_type == "mixture":
+            # Mixture of transformations to create natural clusters
+            component_weights = weights['component_weights']
+            mixture_weights = weights['mixture_weights']
+            
+            y = np.zeros((n_samples, self.out_dim))
+            component_outputs = []
+            
+            for i, comp in enumerate(component_weights):
+                comp_output = np.zeros((n_samples, self.out_dim))
+                
+                if comp['type'] == 'rbf':
+                    # RBF around component center
+                    center = comp['center']
+                    gamma = comp['gamma']
+                    distances_squared = np.sum((X_np - center) ** 2, axis=1)
+                    comp_output[:, :] = np.exp(-gamma * distances_squared)[:, np.newaxis] * comp['scale']
+                    
+                elif comp['type'] == 'polynomial':
+                    # Polynomial centered at component
+                    shifted_X = X_np - comp['center']
+                    comp_output[:, :] = np.sum(shifted_X ** 2, axis=1)[:, np.newaxis] * comp['scale']
+                    
+                elif comp['type'] == 'trigonometric':
+                    # Trigonometric with phase shift
+                    shifted_X = X_np - comp['center']  
+                    comp_output[:, :] = np.sin(np.sum(shifted_X, axis=1) * np.pi * comp['scale'])[:, np.newaxis]
+                
+                component_outputs.append(comp_output * mixture_weights[i])
+            
+            # Combine all components
+            y = np.sum(component_outputs, axis=0)
+            
+            # Add separation between mixture components
+            if self.hyperparams.get('add_component_separation', True):
+                # Assign each sample to closest component
+                distances_to_centers = np.array([
+                    np.sum((X_np - comp['center']) ** 2, axis=1) 
+                    for comp in component_weights
+                ])
+                component_assignments = np.argmin(distances_to_centers, axis=0)
+                
+                # Add component-specific offset
+                for i in range(len(component_weights)):
+                    mask = component_assignments == i
+                    if np.any(mask):
+                        y[mask] += i * 3.0
+                        
         else:
             # Linear combination (matrix multiplication is faster)
             y = X_np @ weights['weights']
