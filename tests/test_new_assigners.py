@@ -73,6 +73,10 @@ def test_assigner(assigner, assigner_name, X, y_continuous):
     # Visualize boundaries
     visualize_boundaries(y_continuous.numpy(), y_classes, assigner_name)
     
+    # Ensure y_classes is 1D for train_test_split
+    if y_classes.ndim > 1:
+        y_classes = y_classes.squeeze()
+        
     # Test classification performance
     X_train, X_test, y_train, y_test = train_test_split(
         X.numpy(), y_classes, test_size=0.2, random_state=42
@@ -131,7 +135,11 @@ def test_all_assigners():
         # Generate continuous targets using the transform
         info = {}
         outputs = scm(X, info)
-        y_continuous = outputs['y_cont'].squeeze()
+        y_continuous = outputs['y_cont']
+        
+        # Ensure proper shape
+        if y_continuous.ndim > 1:
+            y_continuous = y_continuous.squeeze()
         
         # Test each assigner
         assigners = {

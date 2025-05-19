@@ -96,7 +96,11 @@ def test_combination(transform_type, assigner_type, n_samples=1000, n_features=1
     X = torch.randn(n_samples, n_features) * 2.0
     info = {}
     continuous_outputs = scm(X, info)
-    y_continuous = continuous_outputs['y_cont'].numpy().squeeze()
+    y_continuous = continuous_outputs['y_cont'].numpy()
+    
+    # Ensure y_continuous is 1D
+    if y_continuous.ndim > 1:
+        y_continuous = y_continuous.squeeze()
     
     # Assign classes based on assigner type
     if assigner_type == "rank":
@@ -118,7 +122,11 @@ def test_combination(transform_type, assigner_type, n_samples=1000, n_features=1
     
     if assigner_type != "boolean_logic":
         y_tensor = torch.from_numpy(y_continuous)
+        if y_tensor.ndim == 1:
+            y_tensor = y_tensor.unsqueeze(-1)
         y_classes = assigner(y_tensor).numpy()
+        if y_classes.ndim > 1:
+            y_classes = y_classes.squeeze()
     
     # Test classification
     X_train, X_test, y_train, y_test = train_test_split(

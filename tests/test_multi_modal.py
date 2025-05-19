@@ -120,12 +120,26 @@ def test_transform_clustering(transform_type, n_samples=2000, n_features=10, num
     assigner = ImbalancedMulticlassAssigner(num_classes, mode="rank")
     y_classes = assigner(continuous_outputs['y_cont']).numpy()
     
+    # Debug shapes
+    print(f"y_continuous shape: {y_continuous.shape}")
+    print(f"y_classes shape: {y_classes.shape}")
+    
+    # Ensure y_classes is 1D
+    if y_classes.ndim > 1:
+        y_classes = y_classes.squeeze()
+    
     print(f"Continuous values range: [{y_continuous.min():.3f}, {y_continuous.max():.3f}]")
     print(f"Number of unique classes: {len(np.unique(y_classes))}")
     print(f"Class distribution: {np.bincount(y_classes.astype(int))}")
     
+    # Ensure proper shapes for visualization
+    if y_continuous.ndim > 1:
+        y_continuous_squeezed = y_continuous.squeeze()
+    else:
+        y_continuous_squeezed = y_continuous
+        
     # Visualize clustering
-    visualize_clustering(X.numpy(), y_continuous.squeeze(), y_classes, transform_type)
+    visualize_clustering(X.numpy(), y_continuous_squeezed, y_classes, transform_type)
     
     return y_continuous, y_classes
 
