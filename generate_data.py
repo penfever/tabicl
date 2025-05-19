@@ -88,6 +88,8 @@ def generate_single_gpu(args):
         hp_overrides['transform_type'] = args.transform_type
     if args.noise_type is not None:
         hp_overrides['noise_type'] = args.noise_type
+    if args.class_separability is not None and args.class_separability != 1.0:
+        hp_overrides['class_separability'] = args.class_separability
     
     # Merge overrides with default fixed_hp
     from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
@@ -207,6 +209,8 @@ def generate_worker(rank: int, world_size: int, args, start_idx: int):
         hp_overrides['transform_type'] = args.transform_type
     if args.noise_type is not None:
         hp_overrides['noise_type'] = args.noise_type
+    if args.class_separability is not None and args.class_separability != 1.0:
+        hp_overrides['class_separability'] = args.class_separability
     
     # Merge overrides with default fixed_hp
     from tabicl.prior.prior_config import DEFAULT_FIXED_HP, DEFAULT_SAMPLED_HP
@@ -424,6 +428,10 @@ def get_args():
     ap.add_argument("--noise_type", type=str, default="swap",
                     choices=["swap", "corrupt", "boundary_blur", "mixed"],
                     help="type of noise injection for deterministic tree SCM")
+    
+    # Class separability parameter
+    ap.add_argument("--class_separability", type=float, default=1.0,
+                    help="multiplier to scale informative features to increase class separation (default: 1.0)")
     
     # Multi-GPU specific arguments
     ap.add_argument("--num_gpus", type=int, default=-1,

@@ -7,6 +7,58 @@ import torch
 from torch import nn
 
 
+def apply_class_separability(X: torch.Tensor, y: torch.Tensor, class_separability: float) -> torch.Tensor:
+    """Apply class separability scaling to increase separation between classes.
+    
+    This function scales features based on their informativeness (correlation with target)
+    to increase the Euclidean distance between clusters of different classes.
+    
+    Parameters
+    ----------
+    X : torch.Tensor
+        Input features (seq_len, num_features)
+    y : torch.Tensor
+        Target values (seq_len, num_outputs) or (seq_len,)
+    class_separability : float
+        Multiplier to scale informative features (default: 1.0)
+    
+    Returns
+    -------
+    torch.Tensor
+        Scaled features with increased class separation
+    """
+    if class_separability == 1.0:
+        return X
+        
+    # Ensure y is 1D for correlation calculation
+    if len(y.shape) > 1:
+        y = y.squeeze(-1)
+    
+    # Calculate correlation between each feature and the target
+    X_cpu = X.cpu().numpy()
+    y_cpu = y.cpu().numpy()
+    
+    correlations = np.abs([np.corrcoef(X_cpu[:, i], y_cpu)[0, 1] 
+                          for i in range(X.shape[1])])
+    
+    # Replace NaN correlations with 0
+    correlations = np.nan_to_num(correlations, 0.0)
+    
+    # Normalize correlations to [0, 1]
+    if correlations.max() > 0:
+        correlations = correlations / correlations.max()
+    
+    # Apply scaling based on correlation and class_separability parameter
+    # Features more correlated with target get scaled more
+    scaling_factors = 1.0 + (class_separability - 1.0) * correlations
+    scaling_factors = torch.tensor(scaling_factors, device=X.device, dtype=X.dtype)
+    
+    # Apply scaling to features
+    X_scaled = X * scaling_factors.unsqueeze(0)
+    
+    return X_scaled
+
+
 class GaussianNoise(nn.Module):
     def __init__(self, std):
         super().__init__()

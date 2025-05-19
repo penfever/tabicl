@@ -9,7 +9,7 @@ from sklearn.tree import DecisionTreeRegressor
 from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from xgboost import XGBRegressor
 
-from .utils import GaussianNoise, XSampler
+from .utils import GaussianNoise, XSampler, apply_class_separability
 
 
 class TreeLayer(nn.Module):
@@ -182,6 +182,10 @@ class TreeSCM(nn.Module):
         If `True`, the noise standard deviation for each output dimension of a layer
         is sampled from a normal distribution centered at 0 with `noise_std`.
         If `False`, a fixed `noise_std` is used for all dimensions.
+        
+    class_separability : float, default=1.0
+        Multiplier to scale informative features to increase class separation.
+        Higher values increase the Euclidean distance between clusters of different classes.
 
     device : str, default="cpu"
         The computing device ('cpu' or 'cuda') where tensors will be allocated.
@@ -209,6 +213,7 @@ class TreeSCM(nn.Module):
         pre_sample_cause_stats: bool = False,
         noise_std: float = 0.01,
         pre_sample_noise_std: bool = False,
+        class_separability: float = 1.0,
         device: str = "cpu",
         **kwargs,
     ):
@@ -236,6 +241,7 @@ class TreeSCM(nn.Module):
         self.pre_sample_cause_stats = pre_sample_cause_stats
         self.noise_std = noise_std
         self.pre_sample_noise_std = pre_sample_noise_std
+        self.class_separability = class_separability
         self.device = device
 
         if self.is_causal:
@@ -308,6 +314,10 @@ class TreeSCM(nn.Module):
 
         # Handle outputs based on causality
         X, y = self.handle_outputs(causes, outputs)
+        
+        # Apply class separability scaling to increase separation between different classes
+        if self.class_separability != 1.0 and self.num_outputs == 1:
+            X = apply_class_separability(X, y, self.class_separability)
 
         # Check for NaNs and handle them by setting to default values
         if torch.any(torch.isnan(X)) or torch.any(torch.isnan(y)):

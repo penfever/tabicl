@@ -14,7 +14,7 @@ from sklearn.ensemble import RandomForestRegressor, ExtraTreesRegressor
 from xgboost import XGBRegressor
 from typing import Optional, Tuple
 
-from .utils import GaussianNoise, XSampler
+from .utils import GaussianNoise, XSampler, apply_class_separability
 
 
 class DeterministicTreeLayer(nn.Module):
@@ -190,24 +190,33 @@ class DeterministicTreeLayer(nn.Module):
         n_samples = y.shape[0]
         
         if self.noise_type == "swap":
-            # Original swapping logic - optimized version
-            n_classes = int(np.sqrt(n_samples))
-            expected_swaps = min(int(self.swap_prob * n_samples / 2), n_classes)
+            # Percentage-based swapping approach
             
-            if expected_swaps == 0:
+            # Generate random permutation of the label space (similar to y_fake in tree_scm.py)
+            y_permuted = np.random.randn(n_samples, y.shape[1])
+            
+            # Sample a percentile value between 0 and 100 using min/max swap_prob as bounds
+            # self.swap_prob is already sampled between min and max in _make_layer
+            percentile = self.swap_prob * 100  # Convert probability to percentage
+            
+            # Calculate number of samples to swap based on percentile
+            num_samples_to_swap = int(percentile * n_samples / 100)
+            
+            if num_samples_to_swap == 0:
                 return y
-                
-            # Vectorized swapping
-            indices = np.arange(n_samples)
-            np.random.shuffle(indices)
             
-            # Select pairs to swap
-            n_pairs_to_swap = min(expected_swaps, n_samples // 2)
-            swap_idx1 = indices[:n_pairs_to_swap]
-            swap_idx2 = indices[n_pairs_to_swap:2*n_pairs_to_swap]
+            # Ensure we have an even number for pairwise swapping
+            num_samples_to_swap = (num_samples_to_swap // 2) * 2
             
-            # Perform swaps
-            y_noisy[swap_idx1], y_noisy[swap_idx2] = y_noisy[swap_idx2].copy(), y_noisy[swap_idx1].copy()
+            # Randomly select indices to swap
+            indices_to_swap = np.random.choice(n_samples, num_samples_to_swap, replace=False)
+            
+            # Perform pairwise substitution to avoid label redundancy
+            for i in range(0, len(indices_to_swap), 2):
+                idx1 = indices_to_swap[i]
+                idx2 = indices_to_swap[i + 1]
+                y_noisy[idx1] = y_permuted[idx2]
+                y_noisy[idx2] = y_permuted[idx1]
                 
         elif self.noise_type == "corrupt":
             # Randomly corrupt a fraction of targets
@@ -399,6 +408,10 @@ class DeterministicTreeSCM(nn.Module):
     pre_sample_noise_std : bool, default=False
         Whether to pre-sample noise standard deviation.
         
+    class_separability : float, default=1.0
+        Multiplier to scale informative features to increase class separation.
+        Higher values increase the Euclidean distance between clusters of different classes.
+        
     device : str, default="cpu"
         The computing device.
         
@@ -428,6 +441,7 @@ class DeterministicTreeSCM(nn.Module):
                  pre_sample_cause_stats: bool = False,
                  noise_std: float = 0.001,
                  pre_sample_noise_std: bool = False,
+                 class_separability: float = 1.0,
                  device: str = "cpu",
                  **kwargs):
         super(DeterministicTreeSCM, self).__init__()
@@ -454,6 +468,7 @@ class DeterministicTreeSCM(nn.Module):
         self.pre_sample_cause_stats = pre_sample_cause_stats
         self.noise_std = noise_std
         self.pre_sample_noise_std = pre_sample_noise_std
+        self.class_separability = class_separability
         self.device = device
         
         if self.is_causal:
@@ -524,6 +539,13 @@ class DeterministicTreeSCM(nn.Module):
         # Handle outputs based on causality
         X, y = self.handle_outputs(causes, outputs)
         
+        # Apply class separability scaling to increase separation between different classes
+        if self.class_separability != 1.0 and self.num_outputs == 1:
+            # Scale features to increase class separation
+            # We'll scale the features based on their correlation with the target
+            # This creates more distinct clusters for different target values
+            X = apply_class_separability(X, y, self.class_separability)
+        
         # Check for NaNs and handle them
         if torch.any(torch.isnan(X)) or torch.any(torch.isnan(y)):
             X[:] = 0.0
@@ -583,3 +605,4 @@ class DeterministicTreeSCM(nn.Module):
             y = outputs[-1]
             
         return X, y
+    

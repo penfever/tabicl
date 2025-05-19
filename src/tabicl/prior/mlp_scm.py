@@ -7,7 +7,7 @@ from typing import Dict, Any
 import torch
 from torch import nn
 
-from .utils import GaussianNoise, XSampler
+from .utils import GaussianNoise, XSampler, apply_class_separability
 
 
 class MLPSCM(nn.Module):
@@ -113,6 +113,10 @@ class MLPSCM(nn.Module):
 
     pre_sample_noise_std : bool, default=False
         Controls how the standard deviation for the `GaussianNoise` layers is determined.
+        
+    class_separability : float, default=1.0
+        Multiplier to scale informative features to increase class separation.
+        Higher values increase the Euclidean distance between clusters of different classes.
 
     device : str, default="cpu"
         The computing device ('cpu' or 'cuda') where tensors will be allocated.
@@ -142,6 +146,7 @@ class MLPSCM(nn.Module):
         pre_sample_cause_stats: bool = False,
         noise_std: float = 0.01,
         pre_sample_noise_std: bool = False,
+        class_separability: float = 1.0,
         device: str = "cpu",
         **kwargs: Dict[str, Any],
     ):
@@ -168,6 +173,7 @@ class MLPSCM(nn.Module):
         self.pre_sample_cause_stats = pre_sample_cause_stats
         self.noise_std = noise_std
         self.pre_sample_noise_std = pre_sample_noise_std
+        self.class_separability = class_separability
         self.device = device
 
         if self.is_causal:
@@ -254,6 +260,10 @@ class MLPSCM(nn.Module):
 
         # Handle outputs based on causality
         X, y = self.handle_outputs(causes, outputs)
+        
+        # Apply class separability scaling to increase separation between different classes
+        if self.class_separability != 1.0 and self.num_outputs == 1:
+            X = apply_class_separability(X, y, self.class_separability)
 
         # Check for NaNs and handle them by setting to default values
         if torch.any(torch.isnan(X)) or torch.any(torch.isnan(y)):
