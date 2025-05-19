@@ -20,7 +20,7 @@ from tabicl.prior.deterministic_tree_scm import DeterministicTreeSCM
 from tabicl.prior.explicit_clusters_scm import ExplicitClustersSCM
 from tabicl.prior.direct_clusters_scm import DirectClustersSCM
 from tabicl.prior.gmm_clusters_scm import GMMClustersSCM
-from tabicl.prior.imbalanced_assigner import RankBasedAssigner
+from tabicl.prior.imbalanced_assigner import ImbalancedMulticlassAssigner
 
 
 def create_visualization(X, y, method_name, accuracy, num_classes_found):
@@ -128,7 +128,7 @@ def test_method(method_name, scm_class, scm_kwargs=None, use_rank_assigner=True)
         X, _ = scm.forward()
         
         # Apply rank-based assigner
-        assigner = RankBasedAssigner(num_classes=10)
+        assigner = ImbalancedMulticlassAssigner(num_classes=10, imbalance_ratio=1.0, mode="rank")
         y = assigner(y_cont).numpy().squeeze().astype(int)
     else:
         # For methods that return discrete labels directly
