@@ -157,7 +157,7 @@ def main():
     print("=" * 50)
     
     # Test different transformation types
-    transform_types = ['polynomial', 'rbf', 'multi_modal', 'mixture', 'balanced_clusters']
+    transform_types = ['polynomial', 'rbf', 'multi_modal', 'mixture', 'balanced_clusters', 'enhanced_mixture']
     n_samples = 2000
     n_features = 10
     num_classes = 5

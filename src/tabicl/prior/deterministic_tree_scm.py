@@ -210,6 +210,100 @@ class DeterministicTreeLayer(nn.Module):
         
         return centers * 3.0  # Scale up for better separation
     
+    def _create_mixture_components(self, num_components, n_features):
+        """Create diverse mixture components with enhanced separability."""
+        components = []
+        
+        # Use different strategies for different components
+        for i in range(num_components):
+            if i % 3 == 0:
+                # RBF component with distinct center
+                center = np.zeros(n_features)
+                # Place centers on a hypersphere for better separation
+                angle = 2 * np.pi * i / num_components
+                center[0] = np.cos(angle) * 5.0
+                center[1 % n_features] = np.sin(angle) * 5.0
+                # Add random variation in other dimensions
+                if n_features > 2:
+                    center[2:] = np.random.randn(n_features - 2) * 0.5
+                
+                component = {
+                    'type': 'rbf',
+                    'center': center,
+                    'scale': 1.0,
+                    'gamma': 0.3  # Consistent gamma for better control
+                }
+            elif i % 3 == 1:
+                # Polynomial component with offset
+                component = {
+                    'type': 'polynomial',
+                    'center': np.random.randn(n_features) * 2.0,
+                    'scale': 0.5,
+                    'gamma': 0.5,
+                    'degree': 2
+                }
+            else:
+                # Trigonometric component for variety
+                component = {
+                    'type': 'trigonometric',
+                    'center': np.random.randn(n_features) * 1.5,
+                    'scale': 1.0,
+                    'gamma': 0.8,
+                    'frequency': np.pi * (i // 3 + 1)
+                }
+            
+            components.append(component)
+        
+        return components
+    
+    def _create_optimal_centers(self, num_centers, n_features):
+        """Create optimally separated centers using quasi-random sequences."""
+        centers = np.zeros((num_centers, n_features))
+        
+        if n_features >= 3:
+            # Use 3D sphere packing for first 3 dimensions
+            for i in range(num_centers):
+                # Fibonacci sphere algorithm for uniform distribution
+                golden_angle = np.pi * (3.0 - np.sqrt(5.0))
+                theta = golden_angle * i
+                z = 1.0 - (i / float(num_centers - 1)) * 2.0
+                radius = np.sqrt(1.0 - z * z)
+                
+                centers[i, 0] = radius * np.cos(theta) * 5.0
+                centers[i, 1] = radius * np.sin(theta) * 5.0
+                centers[i, 2] = z * 5.0
+                
+                # Random for remaining dimensions
+                if n_features > 3:
+                    centers[i, 3:] = np.random.randn(n_features - 3) * 0.5
+        else:
+            # For low dimensions, use regular grid
+            for i in range(num_centers):
+                angle = 2 * np.pi * i / num_centers
+                centers[i, 0] = np.cos(angle) * 5.0
+                if n_features > 1:
+                    centers[i, 1] = np.sin(angle) * 5.0
+        
+        return centers
+    
+    def _create_enhanced_mixture_components(self, num_components, n_features):
+        """Create enhanced mixture components with optimal properties."""
+        centers = self._create_optimal_centers(num_components, n_features)
+        components = []
+        
+        for i in range(num_components):
+            # All components are RBF for consistency and control
+            component = {
+                'type': 'rbf',
+                'center': centers[i],
+                'scale': 1.0,
+                'gamma': 0.2,  # Tighter clusters
+                'weight': 1.0 / num_components  # Equal weights
+            }
+            components.append(component)
+        
+        return components
+    
     def _precompute_transform_weights(self):
         """Pre-compute weights for deterministic transformations to avoid redundant computations."""
         self._transform_weights = {}
@@ -268,16 +362,10 @@ class DeterministicTreeLayer(nn.Module):
             # Mixture of different transformations to create natural clusters
             num_components = self.hyperparams.get('num_classes', 5)
             self._transform_weights_factory = lambda n_features: {
-                'component_weights': [
-                    {
-                        'type': np.random.choice(['rbf', 'polynomial', 'trigonometric']),
-                        'center': np.random.randn(n_features) * 3.0,
-                        'scale': np.random.uniform(0.5, 2.0),
-                        'gamma': np.random.uniform(0.1, 1.0)
-                    }
-                    for _ in range(num_components)
-                ],
-                'mixture_weights': np.random.dirichlet(np.ones(num_components))
+                'component_weights': self._create_mixture_components(num_components, n_features),
+                'mixture_weights': np.ones(num_components) / num_components,  # Equal weights for balance
+                'separation_factor': 5.0,  # Increase separation between components
+                'normalize': True
             }
         elif self.transform_type == "balanced_clusters":
             # Specifically designed for balanced class generation
@@ -287,6 +375,18 @@ class DeterministicTreeLayer(nn.Module):
                 'gamma': 0.3,  # Fixed gamma for consistent cluster sizes
                 'weights': np.eye(num_clusters, self.out_dim),  # Direct mapping to clusters
                 'balance_factor': 2.0,
+                'normalize': True
+            }
+        elif self.transform_type == "enhanced_mixture":
+            # Enhanced mixture with better separability and balance
+            num_clusters = self.hyperparams.get('num_classes', 5)
+            self._transform_weights_factory = lambda n_features: {
+                'centers': self._create_optimal_centers(num_clusters, n_features),
+                'component_weights': self._create_enhanced_mixture_components(num_clusters, n_features),
+                'mixture_weights': np.ones(num_clusters) / num_clusters,
+                'gamma': 0.2,  # Tighter clusters
+                'separation_factor': 8.0,  # Stronger separation
+                'repulsion_factor': 2.0,  # Add repulsion between clusters
                 'normalize': True
             }
         else:
@@ -446,8 +546,9 @@ class DeterministicTreeLayer(nn.Module):
                     
                 elif comp['type'] == 'trigonometric':
                     # Trigonometric with phase shift
-                    shifted_X = X_np - comp['center']  
-                    comp_output[:, :] = np.sin(np.sum(shifted_X, axis=1) * np.pi * comp['scale'])[:, np.newaxis]
+                    shifted_X = X_np - comp['center']
+                    frequency = comp.get('frequency', np.pi)
+                    comp_output[:, :] = np.sin(np.sum(shifted_X, axis=1) * frequency * comp['scale'])[:, np.newaxis]
                 
                 component_outputs.append(comp_output * mixture_weights[i])
             
@@ -463,11 +564,12 @@ class DeterministicTreeLayer(nn.Module):
                 ])
                 component_assignments = np.argmin(distances_to_centers, axis=0)
                 
-                # Add component-specific offset
+                # Add stronger component-specific offset with separation factor
+                separation_factor = weights.get('separation_factor', 3.0)
                 for i in range(len(component_weights)):
                     mask = component_assignments == i
                     if np.any(mask):
-                        y[mask] += i * 3.0
+                        y[mask] += i * separation_factor
             
             # Normalize to prevent extreme values
             y_mean = np.mean(y, axis=0, keepdims=True)
@@ -511,6 +613,53 @@ class DeterministicTreeLayer(nn.Module):
             
             # Add some continuous variation within clusters
             y += np.random.randn(n_samples, y.shape[1]) * 0.1
+            
+            # Normalize if specified
+            if weights.get('normalize', False):
+                y_mean = np.mean(y, axis=0, keepdims=True)
+                y_std = np.std(y, axis=0, keepdims=True) + 1e-8
+                y = (y - y_mean) / y_std
+        elif self.transform_type == "enhanced_mixture":
+            # Enhanced mixture with repulsion and optimal separation
+            centers = weights['centers']
+            gamma = weights['gamma']
+            repulsion_factor = weights.get('repulsion_factor', 2.0)
+            
+            # Calculate RBF activations for each center
+            activations = np.zeros((n_samples, len(centers)))
+            for i, center in enumerate(centers):
+                distances_squared = np.sum((X_np - center) ** 2, axis=1)
+                activations[:, i] = np.exp(-gamma * distances_squared)
+            
+            # Add repulsion between clusters
+            if repulsion_factor > 0:
+                # Calculate pairwise repulsion
+                for i in range(len(centers)):
+                    for j in range(i + 1, len(centers)):
+                        center_dist = np.linalg.norm(centers[i] - centers[j])
+                        if center_dist < 10.0:  # Only repel nearby clusters
+                            repulsion_strength = np.exp(-center_dist / 2.0) * repulsion_factor
+                            # Reduce activation overlap
+                            overlap = activations[:, i] * activations[:, j]
+                            activations[:, i] -= overlap * repulsion_strength
+                            activations[:, j] -= overlap * repulsion_strength
+            
+            # Normalize activations
+            activations = np.maximum(activations, 0)  # Remove negative values from repulsion
+            row_sums = activations.sum(axis=1, keepdims=True) + 1e-8
+            activations = activations / row_sums
+            
+            # Create output based on strongest activation
+            y = np.zeros((n_samples, 1))
+            cluster_assignments = np.argmax(activations, axis=1)
+            
+            for i in range(len(centers)):
+                mask = cluster_assignments == i
+                if np.any(mask):
+                    y[mask] = i
+            
+            # Add small continuous variation within clusters
+            y += np.random.randn(n_samples, 1) * 0.05
             
             # Normalize if specified
             if weights.get('normalize', False):

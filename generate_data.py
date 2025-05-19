@@ -427,7 +427,7 @@ def get_args():
     ap.add_argument("--max_swap_prob", type=float, default=0.2,
                     help="maximum probability of swapping target pairs in deterministic tree SCM")
     ap.add_argument("--transform_type", type=str, default="polynomial",
-                    choices=["polynomial", "trigonometric", "exponential", "mixed", "rbf", "multi_modal", "mixture", "balanced_clusters"],
+                    choices=["polynomial", "trigonometric", "exponential", "mixed", "rbf", "multi_modal", "mixture", "balanced_clusters", "enhanced_mixture"],
                     help="type of deterministic transformation for deterministic tree SCM")
     ap.add_argument("--noise_type", type=str, default="swap",
                     choices=["swap", "corrupt", "boundary_blur", "mixed"],

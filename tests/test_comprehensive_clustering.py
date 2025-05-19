@@ -38,7 +38,7 @@ def calculate_gini_coefficient(class_distribution):
     return (n + 1 - 2 * np.sum((n - np.arange(n)) * sorted_dist) / cumsum[-1]) / n
 
 
-def test_configuration(transform_type, assigner_type, n_samples=2000, n_features=10, num_classes=5):
+def test_configuration(transform_type, assigner_type, n_samples=2000, n_features=10, num_classes=10):
     """Test a specific configuration and return metrics."""
     print(f"  Testing {transform_type}-{assigner_type}...", end='')
     
@@ -325,7 +325,7 @@ def run_comprehensive_test():
     print("=" * 40)
     
     # Define test configurations
-    transform_types = ['polynomial', 'rbf', 'multi_modal', 'mixture', 'balanced_clusters']
+    transform_types = ['polynomial', 'rbf', 'multi_modal', 'mixture', 'balanced_clusters', 'enhanced_mixture']
     assigner_types = ['rank', 'value', 'piecewise', 'random_region', 'step_function']
     
     # Storage for results
