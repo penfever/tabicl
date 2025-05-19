@@ -12,11 +12,13 @@ generate_dataset() {
     local dataset_type=$1
     local output_dir=$2
     local num_datasets=$3
-    local extra_args="${@:4}"
+    local min_classes=$4
+    local extra_args="${@:5}"
     
     echo "Generating ${dataset_type} data..."
     echo "Output directory: ${output_dir}"
     echo "Number of datasets: ${num_datasets}"
+    echo "Min classes: ${min_classes}"
     echo "Extra arguments: ${extra_args}"
     
     python generate_data.py \
@@ -26,7 +28,7 @@ generate_dataset() {
            --max_features 100 \
            --min_seq 5000 \
            --max_seq 20000 \
-           --min_classes 10 \
+           --min_classes ${min_classes} \
            --max_classes 10 \
            --replay_small \
            --out_dir ${output_dir} \
@@ -39,6 +41,7 @@ generate_dataset() {
 generate_dataset "GMM_85" \
     "../synth/gmm_clusters_85" \
     250 \
+    10 \
     "--prior gmm_clusters_scm \
      --separation_strength 6.5 \
      --balance_strength 0.75"
@@ -46,6 +49,7 @@ generate_dataset "GMM_85" \
 generate_dataset "GMM_90" \
     "../synth/gmm_clusters_90" \
     250 \
+    10 \
     "--prior gmm_clusters_scm \
      --separation_strength 7.5 \
      --balance_strength 0.8"
@@ -54,6 +58,7 @@ generate_dataset "GMM_90" \
 generate_dataset "Explicit_Clusters_Noisy" \
     "../synth/explicit_clusters_noisy" \
     250 \
+    10 \
     "--prior real_explicit_clusters_scm \
      --cluster_separation 3.0 \
      --within_cluster_std 0.3 \
@@ -63,6 +68,7 @@ generate_dataset "Explicit_Clusters_Noisy" \
 generate_dataset "Multimodal_Piecewise" \
     "../synth/multimodal_piecewise" \
     250 \
+    2 \
     "--prior deterministic_tree_scm \
      --no_causal \
      --num_layers 2 \
@@ -79,6 +85,7 @@ generate_dataset "Multimodal_Piecewise" \
 generate_dataset "Polynomial_Piecewise" \
     "../synth/polynomial_piecewise" \
     250 \
+    2 \
     "--prior deterministic_tree_scm \
      --no_causal \
      --num_layers 3 \
@@ -95,6 +102,7 @@ generate_dataset "Polynomial_Piecewise" \
 generate_dataset "Polynomial_Balanced" \
     "../synth/polynomial_balanced" \
     250 \
+    10 \
     "--prior deterministic_tree_scm \
      --no_causal \
      --num_layers 3 \
@@ -111,6 +119,7 @@ generate_dataset "Polynomial_Balanced" \
 generate_dataset "Mixed_StepFunction" \
     "../synth/mixed_stepfunction" \
     250 \
+    5 \
     "--prior deterministic_tree_scm \
      --no_causal \
      --num_layers 2 \
