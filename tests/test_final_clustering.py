@@ -97,7 +97,7 @@ def create_visualization(X, y, method_name, accuracy, num_classes_found):
     plt.tight_layout()
     
     # Save to specific directory
-    output_dir = Path('/Users/benfeuer/Library/CloudStorage/GoogleDrive-penfever@gmail.com/My Drive/Current Projects/tabular-fm-llm/data/clustering_expts')
+    output_dir = Path('./clustering_expts')
     output_dir.mkdir(exist_ok=True)
     
     plt.savefig(output_dir / f'{method_name}_analysis.png', dpi=300, bbox_inches='tight')
@@ -270,7 +270,7 @@ def main():
     
     plt.tight_layout()
     
-    output_dir = Path('./clustering')
+    output_dir = Path('./clustering_expts')
     plt.savefig(output_dir / 'method_comparison.png', dpi=300, bbox_inches='tight')
     plt.close()
     
