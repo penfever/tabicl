@@ -91,7 +91,9 @@ def profile_dataset_generation():
             'class_separability': sep_value
         }
         
-        scm_sampled_hp = {}
+        scm_sampled_hp = {
+            'multiclass_type': {'distribution': 'meta_choice', 'choice_values': ['rank']}
+        }
         
         # Profile dataset creation
         with profile_block(f"Dataset creation (sep={sep_value})"):
@@ -128,11 +130,11 @@ def profile_specific_functions():
         "batch_size_per_subgp": 1,
         "prior_type": "deterministic_tree_scm",
         "min_features": 20,
-        "max_features": 20,
+        "max_features": 21,
         "min_classes": 10,
         "max_classes": 10,
         "min_seq_len": 1000,
-        "max_seq_len": 1000,
+        "max_seq_len": 1001,
         "n_jobs": 1,
         "device": "cpu",
         "scm_fixed_hp": {
@@ -142,13 +144,17 @@ def profile_specific_functions():
             'max_swap_prob': 0.0,
             'class_separability': 5.0
         },
-        "scm_sampled_hp": {}
+        "scm_sampled_hp": {
+            'multiclass_type': {'distribution': 'meta_choice', 'choice_values': ['rank']}
+        }
     }
     
     ds = PriorDataset(**test_params)
     
     # Profile the apply_class_separability function directly
     from src.tabicl.prior.utils import apply_class_separability
+
+    import torch
     
     # Generate some test data
     X = np.random.randn(1000, 20)
