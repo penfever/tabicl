@@ -532,6 +532,7 @@ class DeterministicTreeSCM(nn.Module):
                  seq_len: int = 1024,
                  num_features: int = 100,
                  num_outputs: int = 1,
+                 hyperparams: dict = None,
                  is_causal: bool = False,
                  num_causes: int = 10,
                  y_is_effect: bool = True,
